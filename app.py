@@ -1,10 +1,21 @@
-
-#### **`app.py`**
-```python
 import streamlit as st
 import json
+import os
 from datetime import datetime
 from src.graph import WeightManagementGraph
+
+# --- FIX: Check for the existence of the database before initializing the app ---
+DB_PATH = "db"
+if not os.path.exists(DB_PATH):
+    st.set_page_config(page_title="Error", page_icon="🚨")
+    st.title("🚨 Database Not Found")
+    st.error(
+        "The vector database has not been created yet. "
+        "Please run the ingestion script first from your terminal:\n\n"
+        "1. Add your PDF files to the 'data' folder.\n"
+        "2. Run the command: `python ingest.py`"
+    )
+    st.stop() # Stop the app from running further
 
 st.set_page_config(page_title="Weight Management AI", page_icon="💪")
 st.title("💪 Weight Management & Body Composition AI")
@@ -52,15 +63,17 @@ if prompt := st.chat_input("Ask about nutrition, exercise, or weight loss..."):
             st.markdown(final_answer)
     
     st.session_state.messages.append({"role": "assistant", "content": final_answer})
+    # Store the interaction details for the feedback buttons
     st.session_state.last_interaction = {"query": prompt, "answer": final_answer, "user_profile": user_profile}
 
+# --- FIX: Only show feedback buttons AFTER an interaction has occurred ---
+if "last_interaction" in st.session_state:
     col1, col2, _ = st.columns([1, 2, 5])
-    if "last_interaction" in st.session_state:
-        with col1:
-            if st.button("👍 Good"):
-                log_feedback(st.session_state.last_interaction, "good")
-                st.success("Feedback saved!")
-        with col2:
-            if st.button("👎 Bad"):
-                log_feedback(st.session_state.last_interaction, "bad")
-                st.error("Feedback logged.")
+    with col1:
+        if st.button("👍 Good"):
+            log_feedback(st.session_state.last_interaction, "good")
+            st.success("Feedback saved!")
+    with col2:
+        if st.button("👎 Bad"):
+            log_feedback(_st.session_state.last_interaction, "bad")
+            st.error("Feedback logged.")
