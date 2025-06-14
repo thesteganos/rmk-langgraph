@@ -2,8 +2,9 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import json
+import sys
 from dotenv import load_dotenv
-from urllib.parse import urljoin, quote_plus
+from urllib.parse import urljoin, quote_plus, urlparse, urlunparse
 
 # LangChain components for interacting with the LLM
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -55,13 +56,21 @@ def get_processed_urls():
     """Reads the log of URLs that have already been processed to avoid duplicates."""
     if not os.path.exists(PROCESSED_URLS_LOG):
         return set()
-    with open(PROCESSED_URLS_LOG, "r") as f:
-        return set(line.strip() for line in f)
+    try:
+        with open(PROCESSED_URLS_LOG, "r") as f:
+            return set(line.strip() for line in f)
+    except IOError as e:
+        print(f"CRITICAL Error: Could not read processed URLs log {PROCESSED_URLS_LOG}: {e}", file=sys.stderr)
+        raise  # Re-raise the exception to halt execution if this critical file can't be read
 
 def log_processed_url(url):
     """Adds a new URL to the processed log."""
-    with open(PROCESSED_URLS_LOG, "a") as f:
-        f.write(url + "\n")
+    try:
+        with open(PROCESSED_URLS_LOG, "a") as f:
+            f.write(url + "\n")
+    except IOError as e:
+        print(f"CRITICAL Error: Could not write to processed URLs log {PROCESSED_URLS_LOG} for URL {url}: {e}", file=sys.stderr)
+        raise # Re-raise to indicate failure
 
 def get_article_text(url: str) -> str:
     """Fetches and extracts the main text content from a given article URL."""
@@ -103,6 +112,23 @@ def scrape_search_results(search_url: str, base_url: str) -> list[str]:
         print(f"Error scraping search results {search_url}: {e}")
         return []
 
+from urllib.parse import urlparse, urlunparse, quote_plus # Ensure quote_plus is here if it was only in main
+
+def generate_full_search_url_and_base(search_template: str, query: str) -> tuple[str, str]:
+    """
+    Generates the full search URL and the base URL from a template and query.
+    Example:
+    search_template = "https://www.example.com/search?q={query}"
+    query = "test query"
+    Returns: ("https://www.example.com/search?q=test+query", "https://www.example.com")
+    """
+    encoded_query = quote_plus(query)
+    full_search_url = search_template.format(query=encoded_query)
+
+    parsed_search_url = urlparse(full_search_url)
+    base_url = urlunparse((parsed_search_url.scheme, parsed_search_url.netloc, '', '', '', ''))
+    return full_search_url, base_url
+
 # --- Main Execution ---
 
 def main():
@@ -116,40 +142,43 @@ def main():
     llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=google_api_key)
     
     prompt = ChatPromptTemplate.from_template(
-        "You are a medical knowledge extraction system. Read the article text and generate a single, clear question it answers, and a detailed answer based ONLY on the text. Your output MUST be a single, valid JSON object with keys "question" and "answer". Do not include any other text or formatting. ARTICLE TEXT: --- {article_text} ---"
-    ) # Simplified to a single line for this subtask, will be restored later if needed.
+        """You are a medical knowledge extraction system. Read the article text and generate a single, clear question it answers, and a detailed answer based ONLY on the text.
+    Your output MUST be a single, valid JSON object with keys "question" and "answer". Do not include any other text or formatting.
+    ARTICLE TEXT: --- {article_text} ---"""
+    )
     extraction_chain = prompt | llm | StrOutputParser()
 
     processed_urls = get_processed_urls()
     new_articles_to_process = []
+    urls_already_targeted_this_run = set() # New set
 
     # --- Phase 1: Passive Scraping of High-Value Static Pages ---
     print("\n--- Phase 1: Checking Static Trusted Sources ---")
     for source_name, url in TRUSTED_SOURCES.items():
-        if url not in processed_urls:
+        if url not in processed_urls and url not in urls_already_targeted_this_run: # Modified condition
             print(f"Found new static URL to process: {url}")
             article_text = get_article_text(url)
             if article_text:
                 new_articles_to_process.append({"text": article_text, "url": url})
+                urls_already_targeted_this_run.add(url) # Add to the new set
 
     # --- Phase 2: Active & Recursive Searching for Terms of Interest ---
     print("\n--- Phase 2: Actively Searching for Terms of Interest ---")
     for term in TERMS_OF_INTEREST:
         print(f"\n-- Searching for term: '{term}' --")
         for site_name, search_template in TRUSTED_SEARCH_SITES.items():
-            # URL-encode the term to make it safe for a URL
-            search_url = search_template.format(query=quote_plus(term))
-            base_url = "https://"+search_url.split('/')[2]
+            search_url, base_url = generate_full_search_url_and_base(search_template, term)
 
             print(f"  > Searching on {site_name}...")
             article_urls = scrape_search_results(search_url, base_url)
 
             for url in article_urls:
-                if url not in processed_urls:
+                if url not in processed_urls and url not in urls_already_targeted_this_run: # Modified condition
                     print(f"    * Found new article link: {url}")
                     article_text = get_article_text(url)
                     if article_text:
                         new_articles_to_process.append({"text": article_text, "url": url})
+                        urls_already_targeted_this_run.add(url) # Add to the new set
 
     # --- Final Batch Processing (unified for both phases) ---
     if not new_articles_to_process:
@@ -172,7 +201,7 @@ def main():
             log_processed_url(url) # Log as processed only after successful proposition
             print(f"--> Proposition saved for review from {url}")
         except json.JSONDecodeError:
-            print(f"--> FAILED to parse LLM response for {url}. Skipping.")
+            print(f"--> FAILED to parse LLM response for {url}. Raw output: '{result_str[:500]}...' Skipping.")
     
     print("\n--- Pipeline run complete. ---")
 
