@@ -23,22 +23,31 @@ The application's logic is orchestrated by a LangGraph state machine, which prov
 ```mermaid
 graph TD
     A[User Query] --> B{Safety Filter};
-    B -- Unsafe --> C[Provide Canned Safety Response];
     B -- Safe --> D{Query Classifier};
-    D -- Foundational --> E[Answer from LLM Memory];
     D -- Protocol --> F[RAG on Trusted DB];
-    D -- Hybrid --> G["Agent with Tools (Google/PubMed)"];
-    E --> H[Final Answer];
-    F --> H;
+    
+    F -- Knowledge Gap Found --> P{Log Gap & Reroute};
+    F -- Answer Found --> H[Final Answer];
+    
+    P --> G["Agent with Tools (Google/PubMed)"];
     G -- Disclaimer Added --> H;
-    C --> I[END];
-    H --> I;
+
+    subgraph "Other Paths"
+        B -- Unsafe --> C[Provide Canned Safety Response];
+        D -- Foundational --> E[Answer from LLM Memory];
+        D -- Hybrid --> G;
+        E --> H;
+        C --> I[END];
+        H --> I;
+    end
 
     subgraph "Self-Improvement Loop (Offline)"
+        P -- Logged --> Q[knowledge_gaps.jsonl]
         J[Web App UI] -- User Feedback --> K[feedback_for_review.jsonl];
-        L[knowledge_pipeline.py] -- Automated Web Scraping --> M[pending_review.jsonl];
+        L[knowledge_pipeline.py] -- Web Scraping --> M[pending_review.jsonl];
         K --> N{Expert Review Tool};
         M --> N;
+        Q --> N;
         N -- Approved --> O[Add to Trusted DB];
     end
 ```
