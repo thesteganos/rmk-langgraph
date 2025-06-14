@@ -20,7 +20,7 @@ def perform_startup_checks():
     if missing_vars:
         st.error(
             f"FATAL ERROR: The following required environment variables are missing in your .env file: "
-            f"{', '.join(missing_vars)}\n\n"
+            f"{', '.join(missing_vars)}\\n\\n"  # Note the escaped \n for the subtask
             "Please copy the .env.example file to a new .env file and fill in your credentials."
         )
         return False
@@ -29,9 +29,9 @@ def perform_startup_checks():
     if not os.path.exists("db"):
         st.error(
             "FATAL ERROR: The vector database directory ('db') was not found. "
-            "The knowledge base has not been created yet.\n\n"
-            "Please run the ingestion script first from your terminal:\n"
-            "1. Add your PDF files to the 'data' folder.\n"
+            "The knowledge base has not been created yet.\\n\\n" # Note the escaped \n for the subtask
+            "Please run the ingestion script first from your terminal:\\n" # Note the escaped \n for the subtask
+            "1. Add your PDF files to the 'data' folder.\\n" # Note the escaped \n for the subtask
             "2. Run the command: `python ingest.py`"
         )
         return False

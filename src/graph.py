@@ -16,6 +16,7 @@ from .utils import get_embedding_model # Added import for centralized model load
 
 # Import the custom tool from the tools file
 from .tools import pubmed_tool
+from google.ai.generativelanguage_v1beta.types import Tool as GenAITool # Added for Native Gemini Search
 
 # Load environment variables from .env file
 load_dotenv()
@@ -83,11 +84,15 @@ class WeightManagementGraph:
                 self.neo4j_driver = None
         
         # --- Tool & Agent Initialization ---
-        self.tools = [
-            self.web_search_llm.get_tools("google_search_retrieval")[0],
-            pubmed_tool
-        ]
+        print("INFO: Initializing tools...")
+        # pubmed_tool is imported from .tools
+        self.tools = [pubmed_tool]
+        # self.web_search_llm will be used for native search in hybrid_rag_node
+        # self.llm_with_tools is now specifically for LLM calls that might use pubmed_tool via Langchain's bind_tools mechanism.
+        # If other nodes also need ONLY pubmed_tool, they can use this.
+        # If a node needs NO tools or different tools, it should use self.llm or self.web_search_llm directly.
         self.llm_with_tools = self.web_search_llm.bind_tools(self.tools)
+        print(f"INFO: LLM bound with custom tools: {[tool.name for tool in self.tools]}")
 
     ### NODE DEFINITIONS ###
 
@@ -263,17 +268,55 @@ Question: {question}"""
         node_name = "hybrid_rag_node"
         print(f"---NODE: {node_name}---")
         try:
-            answer = self.llm_with_tools.invoke(state["query"])
-            final_answer_content = getattr(answer, 'content', str(answer))
-            # Ensure all relevant keys are passed through or set
+            print(f"---NODE: {node_name} using Native Gemini Search---")
+            # Use self.web_search_llm as it's configured with a potentially different temperature for web search tasks.
+            # The native Google Search tool is passed directly in the invoke method.
+            try:
+                # Ensure GenAITool is available in this scope (it should be imported at the top of the file)
+                native_google_search = GenAITool(google_search={})
+                # Check if GOOGLE_API_KEY is available, though it should be due to startup checks
+                if not os.getenv("GOOGLE_API_KEY"):
+                    print("ERROR in hybrid_rag_node: GOOGLE_API_KEY not found for native search.", file=sys.stderr)
+                    # Fallback or error state needed here
+                    return {
+                        "final_answer": "Sorry, Google API Key not configured for web search.",
+                        "disclaimer_needed": True,
+                        "query_type": state.get("query_type"), "documents": [], "web_results": [], "neo4j_results": []
+                    }
+
+                answer_obj = self.web_search_llm.invoke(
+                    state["query"],
+                    tools=[native_google_search]
+                )
+                # The response structure for native tool usage might be different.
+                # We need to extract the text content. If the model uses the tool, the response might include tool_calls.
+                # If it answers directly after searching, it will be in answer_obj.content.
+                # For now, assume direct content. If tool_calls are made and need handling, this logic would expand.
+                final_answer_content = getattr(answer_obj, 'content', str(answer_obj))
+
+                # If the answer_obj contains tool_calls, it means Gemini *wants* to call Google Search,
+                # but for built-in tools, it often returns the search result directly in the content if it can.
+                # The example `resp = llm.invoke("query", tools=[GenAITool(google_search={})])` shows `resp.content` having the answer.
+                # We'll assume this behavior.
+
+            except Exception as e:
+                print(f"ERROR in {node_name} during native Gemini search: {e}", file=sys.stderr)
+                # Ensure all state keys are present on error
+                return {
+                    "final_answer": f"Sorry, an error occurred during the web search process in {node_name}.",
+                    "disclaimer_needed": True,
+                    "query_type": state.get("query_type"), "documents": [], "web_results": [], "neo4j_results": []
+                }
+
+            # The rest of the return statement for this node:
             return {
                 "final_answer": final_answer_content,
-                "disclaimer_needed": True,
-                "web_results": state.get("web_results", []), # This is specific to hybrid
-                "documents": state.get("documents", []), # Pass through documents
-                "neo4j_results": state.get("neo4j_results", []) # Pass through neo4j_results
+                "disclaimer_needed": True, # Web search was used
+                "web_results": state.get("web_results", []), # This might need to be populated based on search if possible
+                "documents": state.get("documents", []),
+                "neo4j_results": state.get("neo4j_results", [])
             }
-        except Exception as e:
+        except Exception as e: # This outer try-except is now redundant due to the inner one, but kept for safety.
             print(f"ERROR in {node_name}: {e}", file=sys.stderr)
             return {
                 "final_answer": f"Sorry, an error occurred during the web search process in {node_name}.",

@@ -12,3 +12,4 @@ beautifulsoup4
 biopython
 neo4j
 langchain-neo4j
+google-ai-generativelanguage
