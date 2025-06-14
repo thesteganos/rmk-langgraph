@@ -11,7 +11,6 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langgraph.graph import StateGraph, END
 
-# Import the new tool
 from .tools import pubmed_tool
 
 load_dotenv()
@@ -29,21 +28,24 @@ class GraphState(TypedDict):
 class WeightManagementGraph:
     """The core logic of the adaptive agent, implemented as a LangGraph."""
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0, google_api_key=os.getenv("GOOGLE_API_KEY"))
-        self.web_search_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3, google_api_key=os.getenv("GOOGLE_API_KEY"))
+        # --- FIX: Explicitly pass the API key to the constructor for robustness ---
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise ValueError("GOOGLE_API_KEY not found in .env file. Please set it.")
+            
+        self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0, google_api_key=google_api_key)
+        self.web_search_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3, google_api_key=google_api_key)
         
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
         self.retriever = Chroma(persist_directory=DB_PATH, embedding_function=embeddings).as_retriever(search_kwargs={'k': 3})
         
-        # --- NEW: Define the list of available tools ---
         self.tools = [
-            self.web_search_llm.get_tools("google_search_retrieval")[0], # The Google Search tool
-            pubmed_tool                                                  # Our new PubMed tool
+            self.web_search_llm.get_tools("google_search_retrieval")[0],
+            pubmed_tool
         ]
         self.llm_with_tools = self.web_search_llm.bind_tools(self.tools)
 
     def safety_filter_node(self, state: GraphState) -> dict:
-        # ... (no changes to this node)
         print("---NODE: Safety Filter---")
         prompt = ChatPromptTemplate.from_template(
             """You are a safety classification system. Analyze the user's query.
@@ -56,7 +58,6 @@ class WeightManagementGraph:
         return {"query_type": "unsafe"} if "unsafe" in result.lower() else {"query_type": None}
 
     def classify_query_node(self, state: GraphState) -> dict:
-        # ... (no changes to this node)
         print("---NODE: Classify Query---")
         prompt = ChatPromptTemplate.from_template(
             """Classify the user's query into one of three categories:
@@ -67,17 +68,19 @@ class WeightManagementGraph:
         )
         chain = prompt | self.llm | StrOutputParser()
         result = chain.invoke({"query": state["query"]})
-        print(f"Classification result: {result.lower().strip()}")
-        return {"query_type": result.lower().strip()}
+        classification = result.lower().strip()
+        # Ensure the classification is one of the valid types
+        if classification not in ["foundational", "protocol", "hybrid"]:
+            classification = "hybrid" # Default to hybrid if classification is unclear
+        print(f"Classification result: {classification}")
+        return {"query_type": classification}
 
     def foundational_node(self, state: GraphState) -> dict:
-        # ... (no changes to this node)
         print("---NODE: Foundational Answer---")
         answer = self.llm.invoke(state["query"])
         return {"final_answer": answer.content, "disclaimer_needed": False}
 
     def protocol_rag_node(self, state: GraphState) -> dict:
-        # ... (no changes to this node)
         print("---NODE: Protocol RAG Answer---")
         prompt = ChatPromptTemplate.from_template(
             """You are a specialist medical AI. Use the following trusted documents to answer the user's question accurately.
@@ -93,33 +96,27 @@ class WeightManagementGraph:
 
     def hybrid_rag_node(self, state: GraphState) -> dict:
         print("---NODE: Hybrid RAG (Multi-Tool)---")
-        # UPDATED: This node now uses the multi-tool agent
         answer = self.llm_with_tools.invoke(state["query"])
         return {"final_answer": answer.content, "disclaimer_needed": True}
 
     def add_disclaimer_node(self, state: GraphState) -> dict:
-        # ... (no changes to this node)
         print("---NODE: Add Disclaimer (if needed)---")
-        if state["disclaimer_needed"]:
+        if state.get("disclaimer_needed"):
             disclaimer = ("**Disclaimer:** This information may be based on web search results and is for informational purposes only. It is not a substitute for professional medical advice. Always seek the advice of your physician.")
             return {"final_answer": f"{disclaimer}\n\n---\n\n{state['final_answer']}"}
         return {}
 
     def canned_safety_response_node(self, state: GraphState) -> dict:
-        # ... (no changes to this node)
         print("---NODE: Canned Safety Response---")
         return {"final_answer": "I cannot answer this question as it seeks potentially harmful advice. Please consult with a qualified healthcare professional for any health-related concerns."}
 
     def decide_after_safety(self, state: GraphState):
-        # ... (no changes to this node)
         return "canned_safety_response" if state["query_type"] == "unsafe" else "classify_query"
 
     def decide_after_classification(self, state: GraphState):
-        # ... (no changes to this node)
         return state["query_type"]
 
     def compile_graph(self):
-        # ... (no changes to the graph compilation logic)
         graph = StateGraph(GraphState)
         graph.add_node("safety_filter", self.safety_filter_node)
         graph.add_node("classify_query", self.classify_query_node)
