@@ -28,15 +28,24 @@ class GraphState(TypedDict):
 class WeightManagementGraph:
     """The core logic of the adaptive agent, implemented as a LangGraph."""
     def __init__(self):
-        # --- FIX: More robust API key and dependency check ---
         google_api_key = os.getenv("GOOGLE_API_KEY")
         if not google_api_key:
-            raise ValueError("FATAL ERROR: GOOGLE_API_KEY not found in .env file. The application cannot start.")
+            raise ValueError("FATAL ERROR: GOOGLE_API_KEY not found in .env file.")
         if not os.path.exists(DB_PATH):
              raise FileNotFoundError(f"FATAL ERROR: The database directory '{DB_PATH}' was not found. Please run ingest.py first.")
-            
-        self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0, google_api_key=google_api_key)
-        self.web_search_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3, google_api_key=google_api_key)
+
+        # --- NEW: Use a single, configurable model for all tasks ---
+        model_name = os.getenv("LLM_MODEL")
+        if not model_name:
+            raise ValueError("FATAL ERROR: LLM_MODEL not defined in .env file.")
+        
+        print(f"INFO: Using single LLM_MODEL for all tasks: {model_name}")
+        
+        # We initialize two instances, even with the same model name,
+        # to allow for different configurations (like temperature).
+        self.llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=google_api_key)
+        self.web_search_llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.3, google_api_key=google_api_key)
+        # --- END NEW CODE ---
         
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
         self.retriever = Chroma(persist_directory=DB_PATH, embedding_function=embeddings).as_retriever(search_kwargs={'k': 3})
@@ -47,8 +56,7 @@ class WeightManagementGraph:
         ]
         self.llm_with_tools = self.web_search_llm.bind_tools(self.tools)
 
-    # ... (All other nodes and graph compilation logic remain the same as the previous "fixed" version) ...
-    # ... (The robust prompt in protocol_rag_node is still correct) ...
+    # ... (All other nodes and graph compilation logic remain exactly the same) ...
     def safety_filter_node(self, state: GraphState) -> dict:
         print("---NODE: Safety Filter---")
         prompt = ChatPromptTemplate.from_template(
