@@ -10,6 +10,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI # Added ChatGoogleGene
 from dotenv import load_dotenv
 from src.utils import get_embedding_model
 
+# Set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION to 'python' to potentially mitigate protobuf issues
+# This should be set before any libraries using protobuf are heavily utilized.
+os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+
 DATA_PATH = "data"
 DB_PATH = "db"
 PROCESSED_LOG_FILE = os.path.join(DB_PATH, "processed_files.log")
