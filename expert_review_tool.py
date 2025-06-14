@@ -73,6 +73,33 @@ def process_user_feedback(db):
     os.rename(USER_FEEDBACK_FILE, os.path.join(PROCESSED_DIR, f"user_feedback_{len(feedback_entries)}.jsonl"))
     return len(approved_texts)
 
+def process_knowledge_gaps(db):
+    print("\n--- Processing Logged Knowledge Gaps ---")
+    try:
+        with open("knowledge_gaps.jsonl", "r") as f:
+            gap_entries = [json.loads(line) for line in f]
+    except FileNotFoundError:
+        print("No knowledge gap file found. Skipping.")
+        return 0
+
+    if not gap_entries:
+        print("No new knowledge gaps to process.")
+        return 0
+
+    print("Found gaps. These will be run through the knowledge pipeline to find answers.")
+    # Here, we would integrate with the logic from knowledge_pipeline.py
+    # For simplicity, we will just print them. A full implementation would
+    # call a function that takes a query, scrapes the web, and generates a proposition.
+    for entry in gap_entries:
+        print(f"  - GAP DETECTED FOR QUERY: {entry['query']}")
+        # TODO: Trigger knowledge_pipeline logic for this query
+    
+    # After processing, move the file
+    os.makedirs(PROCESSED_DIR, exist_ok=True)
+    os.rename("knowledge_gaps.jsonl", os.path.join(PROCESSED_DIR, f"gaps_{len(gap_entries)}.jsonl"))
+    print(f"Knowledge gaps have been logged for automated processing.")
+    return 0 # We are not adding directly, just logging for now.
+
 def main():
     print("--- Expert Knowledge Verification & Ingestion Tool ---")
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
@@ -82,6 +109,7 @@ def main():
     # --- FIX: Process both feedback sources ---
     prop_added = process_propositions(db)
     feedback_added = process_user_feedback(db)
+    gaps_processed = process_knowledge_gaps(db)
     
     total_added = prop_added + feedback_added
     if total_added > 0:
