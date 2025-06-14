@@ -28,7 +28,6 @@ class GraphState(TypedDict):
 class WeightManagementGraph:
     """The core logic of the adaptive agent, implemented as a LangGraph."""
     def __init__(self):
-        # --- FIX: Explicitly pass the API key to the constructor for robustness ---
         google_api_key = os.getenv("GOOGLE_API_KEY")
         if not google_api_key:
             raise ValueError("GOOGLE_API_KEY not found in .env file. Please set it.")
@@ -69,7 +68,8 @@ class WeightManagementGraph:
         chain = prompt | self.llm | StrOutputParser()
         result = chain.invoke({"query": state["query"]})
         classification = result.lower().strip()
-        # Ensure the classification is one of the valid types
+        
+        # --- FIX: Defensive check to ensure classification is valid ---
         if classification not in ["foundational", "protocol", "hybrid"]:
             classification = "hybrid" # Default to hybrid if classification is unclear
         print(f"Classification result: {classification}")
@@ -82,11 +82,23 @@ class WeightManagementGraph:
 
     def protocol_rag_node(self, state: GraphState) -> dict:
         print("---NODE: Protocol RAG Answer---")
+        
+        # --- FIX: Critical prompt update for hallucination prevention ---
         prompt = ChatPromptTemplate.from_template(
-            """You are a specialist medical AI. Use the following trusted documents to answer the user's question accurately.
-            Context: {context}
-            Question: {question}"""
+            """You are a specialist medical AI. Your task is to answer the user's question based *only* on the trusted documents provided in the context.
+            
+            - If the context contains relevant information, provide a clear, evidence-based answer based on that information.
+            - If the context is empty or does not contain information relevant to the question, you MUST state that you could not find an answer in the trusted knowledge base.
+            - Do not use any external knowledge or your own memory.
+            
+            Context:
+            {context}
+            
+            Question:
+            {question}
+            """
         )
+        
         rag_chain = (
             {"context": self.retriever | (lambda docs: "\n\n".join(doc.page_content for doc in docs)), "question": RunnablePassthrough()}
             | prompt | self.llm | StrOutputParser()
