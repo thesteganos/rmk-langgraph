@@ -1,40 +1,6 @@
 # rmk-langgraph
-Hybrig-RAG Apadtative Medical Agent
 
-
----
-
-### **Step 1: Create a `.env.example` file**
-
-In your project's root directory, create a new file named `.env.example`. This file serves as a template for the real `.env` file and is safe to commit to GitHub because it contains no secrets.
-
-**`.env.example`**
-```dotenv
-# This is an example file. Copy this to a new file named .env and fill in your actual credentials.
-# The .env file is listed in .gitignore and will NOT be committed to your repository.
-
-# --- Core Credentials ---
-# Get your Google API Key from Google AI Studio: https://aistudio.google.com/app/apikey
-GOOGLE_API_KEY="YOUR_GOOGLE_API_KEY_HERE"
-
-# Get your NCBI/Entrez credentials for PubMed access: https://account.ncbi.nlm.nih.gov/settings/
-# Using these provides higher rate limits and is a best practice.
-ENTREZ_EMAIL="YOUR_EMAIL_REGISTERED_WITH_NCBI@example.com"
-ENTREZ_API_KEY="YOUR_ENTREZ_API_KEY_HERE"
-
-# --- Model Configuration ---
-# The single Gemini model to be used for all tasks in the application.
-# Recommended: "gemini-2.5-pro" for best quality or "gemini-2.5-flash" for speed/cost.
-LLM_MODEL="gemini-1.5-pro"
-```
-
----
-
-### **Step 2: Create the `README.md` file**
-
-In your project's root directory, create the `README.md` file and paste the following content into it.
-
-# Adaptive Medical RAG Agent
+# Adaptive Medical Hybrid RAG Agent
 
 A smart, self-improving AI for Weight Management & Body Composition, built with LangGraph and Gemini.
 
@@ -61,7 +27,7 @@ graph TD
     B -- Safe --> D{Query Classifier};
     D -- Foundational --> E[Answer from LLM Memory];
     D -- Protocol --> F[RAG on Trusted DB];
-    D -- Hybrid --> G[Agent with Tools <br> (Google Search / PubMed)];
+    D -- Hybrid --> G["Agent with Tools (Google/PubMed)"];
     E --> H[Final Answer];
     F --> H;
     G -- Disclaimer Added --> H;
