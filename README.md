@@ -163,7 +163,9 @@ Execute the following command in your terminal.
 ```bash
 python ingest.py
 ```
-The `ingest.py` script processes PDF documents from the `data/` directory. During ingestion:
+The `ingest.py` script processes PDF documents from the `data/` directory. It also loads necessary configurations (like API keys for embedding models, LLMs for graph extraction, and Neo4j connection details) from the `.env` file, similar to `app.py`. Ensure your `.env` file is populated by referring to `.env.example`.
+
+During ingestion:
 1.  Text is extracted and split into manageable chunks.
 2.  These chunks are embedded and stored in ChromaDB for vector search.
 3.  Entities and relationships are extracted from the chunks using a Language Model and stored as a graph in Neo4j. This populates the knowledge graph used in the hybrid RAG process.
