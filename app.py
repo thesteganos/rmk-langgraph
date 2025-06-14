@@ -80,7 +80,7 @@ app = get_graph()
 # Initialize chat history in Streamlit's session state if it doesn't exist
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hello! I am an AI assistant specializing in weight management, obesity, and muscle gain. How can I help you today?"}
+        {"role": "assistant", "content": "Hello! I am an AI assistant specializing in weight management, obesity, muscle gain, and metabolic disorders like Type 2 Diabetes and Metabolic Syndrome. How can I help you today?"}
     ]
 
 # --- UI Components ---
@@ -101,7 +101,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Main chat input loop
-if prompt := st.chat_input("Ask about nutrition, exercise, or weight loss..."):
+if prompt := st.chat_input("Ask about nutrition, exercise, weight management, or metabolic health..."):
     # Add user's message to history and display it
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
