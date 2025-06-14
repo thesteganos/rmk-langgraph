@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 from src.graph import WeightManagementGraph
 
-# --- FIX: Check for the existence of the database before initializing the app ---
 DB_PATH = "db"
 if not os.path.exists(DB_PATH):
     st.set_page_config(page_title="Error", page_icon="🚨")
@@ -15,7 +14,7 @@ if not os.path.exists(DB_PATH):
         "1. Add your PDF files to the 'data' folder.\n"
         "2. Run the command: `python ingest.py`"
     )
-    st.stop() # Stop the app from running further
+    st.stop()
 
 st.set_page_config(page_title="Weight Management AI", page_icon="💪")
 st.title("💪 Weight Management & Body Composition AI")
@@ -63,10 +62,8 @@ if prompt := st.chat_input("Ask about nutrition, exercise, or weight loss..."):
             st.markdown(final_answer)
     
     st.session_state.messages.append({"role": "assistant", "content": final_answer})
-    # Store the interaction details for the feedback buttons
     st.session_state.last_interaction = {"query": prompt, "answer": final_answer, "user_profile": user_profile}
 
-# --- FIX: Only show feedback buttons AFTER an interaction has occurred ---
 if "last_interaction" in st.session_state:
     col1, col2, _ = st.columns([1, 2, 5])
     with col1:
@@ -74,6 +71,7 @@ if "last_interaction" in st.session_state:
             log_feedback(st.session_state.last_interaction, "good")
             st.success("Feedback saved!")
     with col2:
+        # --- FIX: Corrected typo from _st to st ---
         if st.button("👎 Bad"):
-            log_feedback(_st.session_state.last_interaction, "bad")
+            log_feedback(st.session_state.last_interaction, "bad")
             st.error("Feedback logged.")
