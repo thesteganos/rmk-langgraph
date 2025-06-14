@@ -1,6 +1,7 @@
 import os
 import sys # Moved sys import up
 import json # Added json import
+import re # Added re import
 from neo4j import GraphDatabase # Added Neo4j import
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -21,6 +22,9 @@ PROCESSED_LOG_FILE = os.path.join(DB_PATH, "processed_files.log")
 # --- Neo4j Helper Functions ---
 
 def extract_graph_data_from_chunk(text_chunk, llm):
+    # Consider further prompt engineering to guide the LLM towards generating relationship types
+    # that are directly valid or require less aggressive sanitization.
+    # For example, explicitly asking for types with only alphanumeric characters and spaces.
     prompt = ChatPromptTemplate.from_template(
         """
         From the following text, extract entities and their relationships.
@@ -78,12 +82,17 @@ def store_graph_data_in_neo4j(graph_data, driver):
             if not rel.get("source") or not rel.get("target") or not rel.get("type"):
                 print(f"Skipping relationship due to missing source, target, or type: {rel}", file=sys.stderr)
                 continue
+
+            raw_rel_type = rel["type"]
+            # Replace spaces with underscores first, then remove all non-alphanumeric characters (excluding underscores)
+            sanitized_rel_type = re.sub(r'[^a-zA-Z0-9_]', '', raw_rel_type.replace(" ", "_")).upper()
+            # Ensure the relationship type is not empty after sanitization, if so, use a default type
+            final_rel_type = sanitized_rel_type if sanitized_rel_type else "RELATED_TO"
+
             session.run(
-                """
-                MATCH (source:Entity {{name: $source_name}})
-                MATCH (target:Entity {{name: $target_name}})
-                MERGE (source)-[r:{rel_type}]->(target)
-                """.format(rel_type=rel["type"].upper().replace(" ", "_")), # Sanitize relationship type
+                f"MATCH (source:Entity {{name: $source_name}})\n"
+                f"MATCH (target:Entity {{name: $target_name}})\n"
+                f"MERGE (source)-[r:{final_rel_type}]->(target)",
                 source_name=rel["source"], target_name=rel["target"]
             )
     print(f"Stored/merged {len(graph_data.get('entities',[]))} entities and {len(graph_data.get('relationships',[]))} relationships in Neo4j.")
