@@ -1,3 +1,15 @@
+import asyncio
+import sys # Required for the original startup checks, ensure it's there or added if not.
+
+try:
+    # Check if an event loop is already running
+    asyncio.get_running_loop()
+except RuntimeError:  # Specific error: 'There is no current event loop...'
+    # If no event loop is running, create a new one and set it as the current loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+# --- The rest of the app.py file follows ---
 import streamlit as st
 import json
 import os
