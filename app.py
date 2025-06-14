@@ -113,11 +113,24 @@ if prompt := st.chat_input("Ask about nutrition, exercise, or weight loss..."):
             # Prepare the input for the graph
             graph_input = {"query": prompt, "user_profile": user_profile}
             
-            # Invoke the LangGraph agent to get a response
-            response = app.invoke(graph_input)
+            final_answer = "Sorry, an unexpected error occurred. Please try again later." # Default error message
+            try:
+                # Invoke the LangGraph agent to get a response
+                response = app.invoke(graph_input)
+
+                # Safely get the final answer from the response state
+                # The .get() is good, but we'll ensure final_answer is set even if 'response' is None or not a dict.
+                if response and isinstance(response, dict):
+                    final_answer = response.get("final_answer", "Sorry, an error occurred while processing your request in the graph.")
+                elif response: # If response is not a dict but some other truthy value
+                    final_answer = str(response) # Convert to string as a fallback
+                # If response is None, the default 'Sorry, an unexpected error occurred...' will be used.
+
+            except Exception as e:
+                st.error(f"An application error occurred: {e}") # Show a streamlit error message
+                print(f"ERROR during app.invoke: {e}", file=sys.stderr) # Log to stderr for server-side logs
+                # final_answer is already set to a generic error message
             
-            # Safely get the final answer from the response state
-            final_answer = response.get("final_answer", "Sorry, an error occurred while processing your request.")
             st.markdown(final_answer)
     
     # Add the assistant's response to chat history
