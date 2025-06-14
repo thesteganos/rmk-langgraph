@@ -7,6 +7,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate # Added ChatPromptTemplate import
 from langchain_google_genai import ChatGoogleGenerativeAI # Added ChatGoogleGenerativeAI import
+from dotenv import load_dotenv
 from src.utils import get_embedding_model
 
 DATA_PATH = "data"
@@ -103,6 +104,11 @@ def log_processed_file(filename):
 
 def main():
     """Performs incremental ingestion of new PDF files into the ChromaDB vector store."""
+    load_dotenv()
+    if os.getenv("GOOGLE_API_KEY"):
+        print("Successfully loaded environment variables from .env file.")
+    else:
+        print("Info: .env file not found or key 'GOOGLE_API_KEY' is not set. Proceeding with environment variables.")
     print("--- Starting Incremental Ingestion Process ---")
     os.makedirs(DB_PATH, exist_ok=True)
 
