@@ -2,7 +2,6 @@
 Hybrig-RAG Apadtative Medical Agent
 
 
-
 ---
 
 ### **Step 1: Create a `.env.example` file**
@@ -25,7 +24,7 @@ ENTREZ_API_KEY="YOUR_ENTREZ_API_KEY_HERE"
 
 # --- Model Configuration ---
 # The single Gemini model to be used for all tasks in the application.
-# Recommended: "gemini-1.5-pro" for best quality or "gemini-1.5-flash" for speed/cost.
+# Recommended: "gemini-2.5-pro" for best quality or "gemini-2.5-flash" for speed/cost.
 LLM_MODEL="gemini-1.5-pro"
 ```
 
