@@ -149,7 +149,15 @@ cp .env.example .env
 ```
 
 **2. Edit the `.env` file:**
-Open the newly created `.env` file with a text editor and fill in your actual credentials for `GOOGLE_API_KEY`, `ENTREZ_EMAIL`, and `ENTREZ_API_KEY`. You can also change the `LLM_MODEL` if you wish. Remember to also set your `NEO4J_URI`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD` if you are using Neo4j.
+Open the newly created `.env` file with a text editor and fill in your actual credentials and settings:
+-   `GOOGLE_API_KEY`: Your API key for Google Gemini.
+-   `ENTREZ_EMAIL`: Your email address for NCBI Entrez API (PubMed).
+-   `ENTREZ_API_KEY`: Your API key for NCBI Entrez API.
+-   `LLM_MODEL`: The specific Gemini model to use (e.g., "gemini-1.5-flash-latest"). Defaults to "gemini-1.5-flash-preview-05-20" if not set.
+-   `MAX_CONCURRENCY`: (Optional) The maximum number of concurrent requests the knowledge pipeline will make to the Gemini API when processing articles. Defaults to `5`. This helps manage API rate limits and resource usage.
+-   `NEO4J_URI`: The connection URI for your Neo4j instance (e.g., `bolt://localhost:7687` or `neo4j+s://your-aura-instance.databases.neo4j.io`).
+-   `NEO4J_USERNAME`: The username for your Neo4j database.
+-   `NEO4J_PASSWORD`: The password for your Neo4j database.
 
 ### 4. Knowledge Base Ingestion (Mandatory First Step)
 

@@ -232,7 +232,9 @@ def main():
     
     batch_inputs = [{"article_text": article["text"]} for article in new_articles_to_process]
     # Limit concurrency to be kind to the API
-    batch_results = extraction_chain.batch(batch_inputs, {"max_concurrency": 5})
+    # Load MAX_CONCURRENCY from environment variable, default to 5
+    max_concurrency = int(os.getenv("MAX_CONCURRENCY", "5"))
+    batch_results = extraction_chain.batch(batch_inputs, {"max_concurrency": max_concurrency})
 
     for i, result_str in enumerate(batch_results):
         url = new_articles_to_process[i]["url"]
