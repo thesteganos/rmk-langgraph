@@ -28,9 +28,12 @@ class GraphState(TypedDict):
 class WeightManagementGraph:
     """The core logic of the adaptive agent, implemented as a LangGraph."""
     def __init__(self):
+        # --- FIX: More robust API key and dependency check ---
         google_api_key = os.getenv("GOOGLE_API_KEY")
         if not google_api_key:
-            raise ValueError("GOOGLE_API_KEY not found in .env file. Please set it.")
+            raise ValueError("FATAL ERROR: GOOGLE_API_KEY not found in .env file. The application cannot start.")
+        if not os.path.exists(DB_PATH):
+             raise FileNotFoundError(f"FATAL ERROR: The database directory '{DB_PATH}' was not found. Please run ingest.py first.")
             
         self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0, google_api_key=google_api_key)
         self.web_search_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3, google_api_key=google_api_key)
@@ -44,6 +47,8 @@ class WeightManagementGraph:
         ]
         self.llm_with_tools = self.web_search_llm.bind_tools(self.tools)
 
+    # ... (All other nodes and graph compilation logic remain the same as the previous "fixed" version) ...
+    # ... (The robust prompt in protocol_rag_node is still correct) ...
     def safety_filter_node(self, state: GraphState) -> dict:
         print("---NODE: Safety Filter---")
         prompt = ChatPromptTemplate.from_template(
@@ -69,9 +74,8 @@ class WeightManagementGraph:
         result = chain.invoke({"query": state["query"]})
         classification = result.lower().strip()
         
-        # --- FIX: Defensive check to ensure classification is valid ---
         if classification not in ["foundational", "protocol", "hybrid"]:
-            classification = "hybrid" # Default to hybrid if classification is unclear
+            classification = "hybrid"
         print(f"Classification result: {classification}")
         return {"query_type": classification}
 
@@ -83,7 +87,6 @@ class WeightManagementGraph:
     def protocol_rag_node(self, state: GraphState) -> dict:
         print("---NODE: Protocol RAG Answer---")
         
-        # --- FIX: Critical prompt update for hallucination prevention ---
         prompt = ChatPromptTemplate.from_template(
             """You are a specialist medical AI. Your task is to answer the user's question based *only* on the trusted documents provided in the context.
             
