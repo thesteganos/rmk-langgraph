@@ -1,9 +1,11 @@
 import os
 import json
+import sys # Added for stderr
 from datetime import datetime
-from langchain_community.embeddings import HuggingFaceEmbeddings
+# Removed HuggingFaceEmbeddings import, will get from src.utils
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
+from src.utils import get_embedding_model # Added import for centralized model loading
 
 # Note: This tool can optionally use the LLM to process knowledge gaps.
 # We import the necessary components for that advanced functionality.
@@ -33,12 +35,22 @@ def get_llm_with_tools():
 def process_propositions(db):
     """Processes new knowledge proposed by the automated knowledge_pipeline.py."""
     print("\n--- Processing Automated Knowledge Propositions ---")
+    propositions = []
     try:
         with open(PENDING_REVIEW_FILE, "r") as f:
-            propositions = [json.loads(line) for line in f]
+            for line_number, line in enumerate(f, 1):
+                try:
+                    propositions.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    print(f"Error: Could not decode JSON from {PENDING_REVIEW_FILE} at line {line_number}: {e}", file=sys.stderr)
+                    # Optionally, decide if you want to skip the line or stop processing the file
     except FileNotFoundError:
-        print("No pending propositions file found. Skipping.")
+        print(f"Info: No pending propositions file found at {PENDING_REVIEW_FILE}. Skipping.")
         return 0
+    except IOError as e:
+        print(f"Error: Could not read file {PENDING_REVIEW_FILE}: {e}", file=sys.stderr)
+        return 0
+
 
     if not propositions:
         print("No new knowledge propositions to review.")
@@ -59,17 +71,31 @@ def process_propositions(db):
         db.add_texts(texts=approved_texts)
     
     # Archive the processed file
-    os.rename(PENDING_REVIEW_FILE, os.path.join(PROCESSED_DIR, f"propositions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"))
+    try:
+        if os.path.exists(PENDING_REVIEW_FILE): # Check if file exists before trying to rename
+            archive_name = os.path.join(PROCESSED_DIR, f"propositions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl")
+            os.rename(PENDING_REVIEW_FILE, archive_name)
+            print(f"Archived {PENDING_REVIEW_FILE} to {archive_name}")
+    except OSError as e:
+        print(f"Error: Could not archive file {PENDING_REVIEW_FILE}: {e}", file=sys.stderr)
     return len(approved_texts)
 
 def process_user_feedback(db):
     """Processes 'Good' Q&A pairs submitted by users via the web app."""
     print("\n--- Processing 'Good' User Feedback ---")
+    feedback_entries = []
     try:
         with open(USER_FEEDBACK_FILE, "r") as f:
-            feedback_entries = [json.loads(line) for line in f]
+            for line_number, line in enumerate(f, 1):
+                try:
+                    feedback_entries.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    print(f"Error: Could not decode JSON from {USER_FEEDBACK_FILE} at line {line_number}: {e}", file=sys.stderr)
     except FileNotFoundError:
-        print("No user feedback file found. Skipping.")
+        print(f"Info: No user feedback file found at {USER_FEEDBACK_FILE}. Skipping.")
+        return 0
+    except IOError as e:
+        print(f"Error: Could not read file {USER_FEEDBACK_FILE}: {e}", file=sys.stderr)
         return 0
 
     good_feedback = [e for e in feedback_entries if e["feedback"] == "good"]
@@ -92,7 +118,13 @@ def process_user_feedback(db):
         db.add_texts(texts=approved_texts)
 
     # Archive the processed file
-    os.rename(USER_FEEDBACK_FILE, os.path.join(PROCESSED_DIR, f"user_feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"))
+    try:
+        if os.path.exists(USER_FEEDBACK_FILE):
+            archive_name = os.path.join(PROCESSED_DIR, f"user_feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl")
+            os.rename(USER_FEEDBACK_FILE, archive_name)
+            print(f"Archived {USER_FEEDBACK_FILE} to {archive_name}")
+    except OSError as e:
+        print(f"Error: Could not archive file {USER_FEEDBACK_FILE}: {e}", file=sys.stderr)
     return len(approved_texts)
 
 def process_knowledge_gaps(db, llm_with_tools):
@@ -102,11 +134,19 @@ def process_knowledge_gaps(db, llm_with_tools):
         print("Skipping knowledge gap processing because LLM is not configured.")
         return 0
         
+    gap_entries = []
     try:
         with open(KNOWLEDGE_GAPS_FILE, "r") as f:
-            gap_entries = [json.loads(line) for line in f]
+            for line_number, line in enumerate(f, 1):
+                try:
+                    gap_entries.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    print(f"Error: Could not decode JSON from {KNOWLEDGE_GAPS_FILE} at line {line_number}: {e}", file=sys.stderr)
     except FileNotFoundError:
-        print("No knowledge gap file found. Skipping.")
+        print(f"Info: No knowledge gap file found at {KNOWLEDGE_GAPS_FILE}. Skipping.")
+        return 0
+    except IOError as e:
+        print(f"Error: Could not read file {KNOWLEDGE_GAPS_FILE}: {e}", file=sys.stderr)
         return 0
 
     if not gap_entries:
@@ -136,7 +176,13 @@ def process_knowledge_gaps(db, llm_with_tools):
         db.add_texts(texts=approved_texts)
 
     # Archive the processed file
-    os.rename(KNOWLEDGE_GAPS_FILE, os.path.join(PROCESSED_DIR, f"gaps_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"))
+    try:
+        if os.path.exists(KNOWLEDGE_GAPS_FILE):
+            archive_name = os.path.join(PROCESSED_DIR, f"gaps_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl")
+            os.rename(KNOWLEDGE_GAPS_FILE, archive_name)
+            print(f"Archived {KNOWLEDGE_GAPS_FILE} to {archive_name}")
+    except OSError as e:
+        print(f"Error: Could not archive file {KNOWLEDGE_GAPS_FILE}: {e}", file=sys.stderr)
     return len(approved_texts)
 
 def main():
@@ -147,7 +193,13 @@ def main():
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     
     # Initialize components
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
+    print("Loading embedding model...")
+    embeddings = get_embedding_model()
+    if not embeddings:
+        print("FATAL: Embedding model could not be loaded. Exiting.", file=sys.stderr)
+        return # Exit main()
+    print("Embedding model loaded successfully.")
+
     db = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
     llm_with_tools = get_llm_with_tools()
     print(f"Connected to ChromaDB at {DB_PATH}")

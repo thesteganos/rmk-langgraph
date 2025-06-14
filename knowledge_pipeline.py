@@ -2,6 +2,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import json
+import sys # Added for stderr
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -18,14 +19,27 @@ PENDING_REVIEW_FILE = "pending_review.jsonl"
 PROCESSED_URLS_LOG = "processed_urls.log"
 
 def get_processed_urls():
-    if not os.path.exists(PROCESSED_URLS_LOG):
+    """Reads the log of already processed URLs."""
+    try:
+        with open(PROCESSED_URLS_LOG, "r") as f:
+            return set(line.strip() for line in f)
+    except FileNotFoundError:
+        # If the log file doesn't exist, it means no URLs have been processed yet.
         return set()
-    with open(PROCESSED_URLS_LOG, "r") as f:
-        return set(line.strip() for line in f)
+    except IOError as e:
+        print(f"Error: Could not read processed URLs log {PROCESSED_URLS_LOG}: {e}", file=sys.stderr)
+        # Depending on desired behavior, could exit or return empty set and try to continue
+        return set()
+
 
 def log_processed_url(url):
-    with open(PROCESSED_URLS_LOG, "a") as f:
-        f.write(url + "\n")
+    """Adds a new URL to the processed log."""
+    try:
+        with open(PROCESSED_URLS_LOG, "a") as f:
+            f.write(url + "\n")
+    except IOError as e:
+        print(f"Error: Could not write to processed URLs log {PROCESSED_URLS_LOG}: {e}", file=sys.stderr)
+
 
 def get_article_text(url: str) -> str:
     # ... (get_article_text function remains the same as previous version) ...
@@ -85,14 +99,21 @@ def main():
     for i, result_str in enumerate(batch_results):
         url = new_articles_to_process[i]["url"]
         try:
-            proposition = json.loads(result_str)
+            proposition = json.loads(result_str) # This can raise JSONDecodeError
             proposition['source_url'] = url
-            with open(PENDING_REVIEW_FILE, "a") as f:
-                f.write(json.dumps(proposition) + "\n")
-            log_processed_url(url) # Log as processed only after success
-            print(f"--> Proposition saved for review from {url}")
-        except json.JSONDecodeError:
-            print(f"--> FAILED to parse LLM response for {url}. Skipping.")
+
+            try:
+                with open(PENDING_REVIEW_FILE, "a") as f:
+                    f.write(json.dumps(proposition) + "\n")
+                log_processed_url(url) # Log as processed only after successful write and LLM parse
+                print(f"--> Proposition saved for review from {url}")
+            except IOError as e:
+                print(f"Error: Could not write to pending review file {PENDING_REVIEW_FILE} for URL {url}: {e}", file=sys.stderr)
+                # Decide if we should attempt to remove url from processed_urls if logging it happened before this error.
+                # Current logic logs after write, so that's fine.
+
+        except json.JSONDecodeError as e:
+            print(f"Error: FAILED to parse LLM response for {url}: {e}. LLM Output: '{result_str}'. Skipping.", file=sys.stderr)
     
     print("\n--- Pipeline run complete. ---")
 
