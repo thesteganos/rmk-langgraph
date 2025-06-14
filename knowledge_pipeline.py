@@ -30,9 +30,20 @@ def main():
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0, google_api_key=os.getenv("GOOGLE_API_KEY"))
     
     prompt = ChatPromptTemplate.from_template(
-        """Read the following article. Generate a single, clear question the article answers, and a detailed answer based ONLY on the text.
-        Format your response as a JSON object with keys "question" and "answer".
-        ARTICLE TEXT: --- {article_text} ---"""
+        """You are a medical knowledge extraction system. Read the following article text and perform two tasks:
+        1.  Generate a single, clear question that the article answers.
+        2.  Generate a detailed, comprehensive answer to that question based ONLY on the provided text.
+
+        Your final output MUST be a single, valid JSON object with two keys: "question" and "answer". Do not include any other text or formatting like "```json".
+
+        Example:
+        {{"question": "What are the benefits of a healthy diet?", "answer": "A healthy diet helps protect against malnutrition..."}}
+
+        ARTICLE TEXT:
+        ---
+        {article_text}
+        ---
+        """
     )
     extraction_chain = prompt | llm | StrOutputParser()
 
