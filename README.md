@@ -4,17 +4,22 @@
 
 A smart, self-improving AI for Weight Management & Body Composition, built with LangGraph and Gemini.
 
-This project implements the principles of the "Adaptive-RAG" paper to create an intelligent agent that dynamically adapts its strategy for answering questions. Instead of using a single, rigid workflow, it classifies incoming queries and routes them to the most appropriate tool, whether that's its internal memory, a trusted knowledge base, or live web search.
+This project implements an adaptive Retrieval Augmented Generation (RAG) system for answering questions related to weight management and health. It now features a hybrid retrieval approach, leveraging both semantic vector search (via ChromaDB) and structured knowledge graph querying (via Neo4j) to provide comprehensive and contextually relevant answers.
 
 The system is designed for the high-stakes domain of medical knowledge, specifically focusing on obesity, weight loss, and muscle gain. It includes a multi-layered self-improvement loop with human-in-the-loop verification to ensure the knowledge base remains accurate, safe, and up-to-date.
 
 ## Core Features
 
--   **Adaptive RAG Architecture:** Built with LangGraph, the agent classifies queries into `foundational`, `protocol`, or `hybrid` and uses the best strategy for each.
+-   **Adaptive RAG Architecture:** Built with LangGraph, the agent classifies queries into `foundational`, `protocol`, or `hybrid` and uses the best strategy for each. This includes hybrid retrieval from vector and graph databases for `protocol` queries.
 -   **Multi-Tool Capability:** The agent can choose between using Google Search for general or recent topics and a specialized PubMed API tool for deep scientific research.
 -   **Human-in-the-Loop Self-Improvement:** The system learns from both user feedback and a semi-automated knowledge pipeline, but a human expert provides the final approval before new knowledge is added to the trusted database.
 -   **Safety First:** Includes a safety filter to identify and block harmful queries, providing a safe user experience.
 -   **Configurable & Maintainable:** Key settings like the LLM model name are managed in a `.env` file, allowing for easy experimentation and upgrades.
+
+### Knowledge Sources
+
+*   **Vector Store (ChromaDB):** Stores text chunks from ingested PDF documents, enabling semantic search for relevant passages.
+*   **Knowledge Graph (Neo4j):** Stores entities (like conditions, treatments, concepts) and their relationships extracted from the documents. This allows the system to retrieve interconnected information and understand the context more deeply, particularly for queries requiring factual, structured data (e.g., via the "protocol" query pathway).
 
 ## Architecture & Workflow
 
@@ -63,6 +68,45 @@ graph TD
 
 ---
 
+## Neo4j Setup
+
+This project uses Neo4j as a graph database for knowledge representation in the RAG pipeline.
+
+### Docker (Recommended for Local Development)
+
+1.  Pull the Neo4j Docker image:
+    ```bash
+    docker pull neo4j:latest
+    ```
+2.  Run the Neo4j container:
+    ```bash
+    docker run \
+        --name neo4j-container \
+        -p 7474:7474 -p 7687:7687 \
+        -d \
+        --env NEO4J_AUTH=neo4j/your_password \
+        neo4j:latest
+    ```
+    Replace `your_password` with a secure password. This will be the password you set in your `.env` file for `NEO4J_PASSWORD`.
+3.  Access the Neo4j Browser at `http://localhost:7474` and log in with username `neo4j` and the password you set.
+
+### Neo4j AuraDB (Cloud Option)
+
+Alternatively, you can use [Neo4j AuraDB](https://neo4j.com/cloud/platform/auradb/), Neo4j's fully managed cloud database service.
+
+1.  Create a free instance on AuraDB.
+2.  Once your instance is running, find the connection URI (usually starting with `neo4j+s://`) and credentials.
+3.  Update your `.env` file with these details:
+    ```
+    NEO4J_URI=your_auradb_uri
+    NEO4J_USERNAME=your_auradb_username
+    NEO4J_PASSWORD=your_auradb_password
+    ```
+
+Remember to create an `.env` file from `.env.example` and fill in your specific Neo4j credentials.
+
+---
+
 ## How-To Guide: Setup and Usage
 
 Follow these steps to get the application running on your local machine.
@@ -105,20 +149,26 @@ cp .env.example .env
 ```
 
 **2. Edit the `.env` file:**
-Open the newly created `.env` file with a text editor and fill in your actual credentials for `GOOGLE_API_KEY`, `ENTREZ_EMAIL`, and `ENTREZ_API_KEY`. You can also change the `LLM_MODEL` if you wish.
+Open the newly created `.env` file with a text editor and fill in your actual credentials for `GOOGLE_API_KEY`, `ENTREZ_EMAIL`, and `ENTREZ_API_KEY`. You can also change the `LLM_MODEL` if you wish. Remember to also set your `NEO4J_URI`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD` if you are using Neo4j.
 
 ### 4. Knowledge Base Ingestion (Mandatory First Step)
 
-Before you can run the main application, you must build the trusted knowledge base.
+Before you can run the main application, you must build the trusted knowledge base, which populates both ChromaDB and Neo4j.
 
 **1. Add your documents:**
-Place your trusted PDF files (medical textbooks, guidelines, etc.) inside the `/data` directory.
+Place your trusted PDF files (medical textbooks, guidelines, etc.) inside the `data/` directory.
 
-**2. Run the ingestion script:**
-Execute the following command in your terminal. This will read the PDFs, chunk them, embed them, and save them to a local ChromaDB instance in the `/db` directory.
+**2. Run the ingestion script (`ingest.py`):**
+Execute the following command in your terminal.
 ```bash
 python ingest.py
 ```
+The `ingest.py` script processes PDF documents from the `data/` directory. During ingestion:
+1.  Text is extracted and split into manageable chunks.
+2.  These chunks are embedded and stored in ChromaDB for vector search.
+3.  Entities and relationships are extracted from the chunks using a Language Model and stored as a graph in Neo4j. This populates the knowledge graph used in the hybrid RAG process.
+The script keeps track of processed files to enable incremental updates.
+
 
 ### 5. Running the Application
 

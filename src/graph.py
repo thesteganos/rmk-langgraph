@@ -3,6 +3,7 @@ import json
 import sys # For sys.stderr
 from typing import TypedDict, Literal
 from dotenv import load_dotenv
+from neo4j import GraphDatabase # Added Neo4j import
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -27,6 +28,7 @@ class GraphState(TypedDict):
     query_type: Literal["foundational", "protocol", "hybrid", "unsafe"]
     documents: list
     web_results: list
+    neo4j_results: list # Added neo4j_results
     final_answer: str
     disclaimer_needed: bool
 
@@ -63,6 +65,22 @@ class WeightManagementGraph:
             raise ValueError("FATAL ERROR: Embedding model could not be loaded. Application cannot start.")
         print("INFO: Embedding model loaded successfully for retriever.")
         self.retriever = Chroma(persist_directory=DB_PATH, embedding_function=embeddings).as_retriever(search_kwargs={'k': 3})
+
+        # --- Neo4j Driver Initialization ---
+        self.neo4j_driver = None
+        neo4j_uri = os.getenv("NEO4J_URI")
+        neo4j_user = os.getenv("NEO4J_USERNAME")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
+        if not all([neo4j_uri, neo4j_user, neo4j_password]):
+            print("Warning: Neo4j environment variables not fully set. Neo4j RAG integration will be disabled.", file=sys.stderr)
+        else:
+            try:
+                self.neo4j_driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+                self.neo4j_driver.verify_connectivity()
+                print("Successfully connected to Neo4j for RAG.")
+            except Exception as e:
+                print(f"Error: Could not connect to Neo4j for RAG: {e}. Neo4j RAG integration will be disabled.", file=sys.stderr)
+                self.neo4j_driver = None
         
         # --- Tool & Agent Initialization ---
         self.tools = [
@@ -94,7 +112,8 @@ class WeightManagementGraph:
                 "final_answer": f"Sorry, an unexpected error occurred in {node_name}.",
                 "disclaimer_needed": False, # Ensure all state keys are present
                 "documents": [],
-                "web_results": []
+                "web_results": [],
+                "neo4j_results": [] # Added neo4j_results
             }
 
     def classify_query_node(self, state: GraphState) -> dict:
@@ -123,7 +142,8 @@ class WeightManagementGraph:
                 "final_answer": f"Sorry, an unexpected error occurred in {node_name}.",
                 "disclaimer_needed": False,
                 "documents": [],
-                "web_results": []
+                "web_results": [],
+                "neo4j_results": [] # Added neo4j_results
             }
 
     def foundational_node(self, state: GraphState) -> dict:
@@ -132,51 +152,110 @@ class WeightManagementGraph:
         print(f"---NODE: {node_name}---")
         try:
             answer = self.llm.invoke(state["query"])
-            return {"final_answer": answer.content, "disclaimer_needed": False}
+            # Pass through neo4j_results, even if empty
+            return {"final_answer": answer.content, "disclaimer_needed": False, "documents": [], "web_results": [], "neo4j_results": state.get("neo4j_results", [])}
         except Exception as e:
             print(f"ERROR in {node_name}: {e}", file=sys.stderr)
             return {
                 "final_answer": f"Sorry, an unexpected error occurred in {node_name}.",
                 "disclaimer_needed": False,
-                 # Ensure other relevant GraphState keys are present if needed by subsequent nodes
                 "query_type": state.get("query_type"),
                 "documents": [],
-                "web_results": []
+                "web_results": [],
+                "neo4j_results": [] # Added neo4j_results
             }
 
+    def simple_neo4j_retriever(self, query: str) -> list[str]:
+        if not self.neo4j_driver:
+            return []
+
+        keyword = query  # Using the whole query as keyword for simplicity
+
+        cypher_query = """
+        MATCH (e:Entity)
+        WHERE toLower(e.name) CONTAINS toLower($keyword)
+        OPTIONAL MATCH (e)-[r]-(related_node:Entity)
+        WITH e, r, related_node
+        LIMIT 20
+        WITH e, collect({{name: related_node.name, type: related_node.type, rel_type: type(r), start_node_name: startNode(r).name, end_node_name: endNode(r).name}}) AS relations_details
+        RETURN e.name AS entityName, e.type AS entityType, relations_details
+        LIMIT 5
+        """
+
+        results_text_list = []
+        try:
+            with self.neo4j_driver.session() as session:
+                records = session.run(cypher_query, keyword=keyword)
+                for record in records:
+                    entity_name = record.get("entityName")
+                    entity_type = record.get("entityType")
+                    relations_info = []
+                    for rel_detail in record.get("relations_details", []):
+                        if rel_detail and rel_detail['name'] and rel_detail['rel_type']:
+                            rel_type = rel_detail['rel_type']
+                            if rel_detail['start_node_name'] == entity_name:
+                                direction = "-[" + rel_type + "]->"
+                                connected_node_info = f"{rel_detail['name']}({rel_detail['type']})"
+                            else:
+                                direction = "<-[" + rel_type + "]-"
+                                connected_node_info = f"{rel_detail['name']}({rel_detail['type']})"
+                            relations_info.append(f"{entity_name} {direction} {connected_node_info}")
+
+                    context_str = f"Entity: {entity_name} ({entity_type}). Related: {', '.join(relations_info) if relations_info else 'No direct relations found matching the criteria.'}"
+                    results_text_list.append(context_str)
+                if results_text_list:
+                     print(f"Neo4j retriever found for keyword '{keyword}': {results_text_list}")
+        except Exception as e:
+            print(f"Error during Neo4j retrieval with keyword '{keyword}': {e}", file=sys.stderr)
+            return []
+        return results_text_list
+
     def protocol_rag_node(self, state: GraphState) -> dict:
-        """Answers based on the trusted knowledge base and detects knowledge gaps."""
+        """Answers based on the trusted knowledge base (vector + graph) and detects knowledge gaps."""
         node_name = "protocol_rag_node"
         print(f"---NODE: {node_name}---")
         try:
-            prompt = ChatPromptTemplate.from_template(
-                """You are a specialist medical AI. Your task is to answer the user's question based *only* on the trusted documents provided in the context.
-                - If the context contains relevant information, provide a clear, evidence-based answer.
-                - If the context is empty or irrelevant, you MUST respond with the exact phrase: "KNOWLEDGE_GAP".
-                - Do not use any external knowledge.
-                Context: {context}
-                Question: {question}"""
-            )
-            rag_chain = (
-                {"context": self.retriever | (lambda docs: "\n\n".join(doc.page_content for doc in docs)), "question": RunnablePassthrough()}
-                | prompt | self.llm | StrOutputParser()
-            )
-            answer = rag_chain.invoke(state["query"])
-            # Ensure 'documents' key is populated if retriever runs, even if not explicitly used by this node's primary output
-            # This might be more complex if retriever errors separately. For now, assume it runs before or within rag_chain.
-            # If self.retriever itself can fail, that needs its own try-except.
-            # For now, focusing on LLM call.
-            return {"final_answer": answer, "disclaimer_needed": False, "documents": state.get("documents", [])}
+            chroma_docs = self.retriever.invoke(state["query"])
+            chroma_context_str = "\n\n".join(doc.page_content for doc in chroma_docs)
+
+            neo4j_context_list = self.simple_neo4j_retriever(state["query"])
+            neo4j_context_str = "\n\n".join(neo4j_context_list)
+
+            if neo4j_context_str:
+                combined_context = f"Knowledge Base Documents (from vector search):\n{chroma_context_str}\n\nKnowledge Graph Information (from graph database):\n{neo4j_context_str}"
+            else:
+                combined_context = f"Knowledge Base Documents (from vector search):\n{chroma_context_str}"
+
+            prompt_template_str = """You are a specialist medical AI. Your task is to answer the user's question based *only* on the trusted information provided in the context.
+The context may include documents from a knowledge base (vector search) and structured information from a knowledge graph.
+- If the context contains relevant information, provide a clear, evidence-based answer. Synthesize information from both sources if applicable.
+- If the context (from both vector and graph searches) is empty or irrelevant to the question, you MUST respond with the exact phrase: "KNOWLEDGE_GAP".
+- Do not use any external knowledge. Be concise.
+Context:
+{context}
+Question: {question}"""
+            prompt = ChatPromptTemplate.from_template(prompt_template_str)
+
+            llm_processing_chain = prompt | self.llm | StrOutputParser()
+            answer = llm_processing_chain.invoke({"context": combined_context, "question": state["query"]})
+
+            return {
+                "final_answer": answer,
+                "disclaimer_needed": False,
+                "documents": chroma_docs,
+                "neo4j_results": neo4j_context_list,
+                "query_type": state.get("query_type"),
+                "web_results": state.get("web_results", []) # Ensure web_results is passed through
+            }
         except Exception as e:
             print(f"ERROR in {node_name}: {e}", file=sys.stderr)
-            # If RAG fails, it's like a knowledge gap, so might reroute to hybrid or provide error.
-            # For now, providing error. Could also return "KNOWLEDGE_GAP" to trigger rerouting.
             return {
-                "final_answer": f"Sorry, an error occurred while retrieving information from the knowledge base in {node_name}.",
+                "final_answer": f"Sorry, an error occurred while retrieving information in {node_name}.",
                 "disclaimer_needed": False,
                 "query_type": state.get("query_type"),
                 "documents": [],
-                "web_results": []
+                "web_results": state.get("web_results", []),
+                "neo4j_results": []
             }
 
     def hybrid_rag_node(self, state: GraphState) -> dict:
@@ -185,17 +264,24 @@ class WeightManagementGraph:
         print(f"---NODE: {node_name}---")
         try:
             answer = self.llm_with_tools.invoke(state["query"])
-            # Assuming answer might be a complex object, ensure we get .content if applicable
             final_answer_content = getattr(answer, 'content', str(answer))
-            return {"final_answer": final_answer_content, "disclaimer_needed": True, "web_results": state.get("web_results", [])}
+            # Ensure all relevant keys are passed through or set
+            return {
+                "final_answer": final_answer_content,
+                "disclaimer_needed": True,
+                "web_results": state.get("web_results", []), # This is specific to hybrid
+                "documents": state.get("documents", []), # Pass through documents
+                "neo4j_results": state.get("neo4j_results", []) # Pass through neo4j_results
+            }
         except Exception as e:
             print(f"ERROR in {node_name}: {e}", file=sys.stderr)
             return {
                 "final_answer": f"Sorry, an error occurred during the web search process in {node_name}.",
-                "disclaimer_needed": True, # Still good to have disclaimer if error happens during web search
+                "disclaimer_needed": True,
                 "query_type": state.get("query_type"),
                 "documents": [],
-                "web_results": []
+                "web_results": [],
+                "neo4j_results": [] # Added neo4j_results
             }
 
     def log_and_reroute_node(self, state: GraphState) -> dict:
@@ -218,13 +304,13 @@ class WeightManagementGraph:
             # For now, just log and return empty or error state.
             return {
                 "final_answer": f"Sorry, an error occurred during the logging process in {node_name}.",
-                 # Keep other state elements as they are or default
                 "query": state.get("query"),
                 "user_profile": state.get("user_profile",{}),
                 "query_type": state.get("query_type"),
                 "documents": state.get("documents",[]),
                 "web_results": state.get("web_results",[]),
-                "disclaimer_needed": state.get("disclaimer_needed", False)
+                "disclaimer_needed": state.get("disclaimer_needed", False),
+                "neo4j_results": state.get("neo4j_results", []) # Added neo4j_results
             }
 
 

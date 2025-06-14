@@ -10,3 +10,5 @@ python-dotenv
 requests
 beautifulsoup4
 biopython
+neo4j
+langchain-neo4j
