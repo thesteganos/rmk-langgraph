@@ -1,15 +1,20 @@
-streamlit
-langchain
-langchain-google-genai
-langgraph
-langchain-community
-langchain-chroma
-sentence-transformers
-pypdf
-python-dotenv
-requests
-beautifulsoup4
-biopython
-neo4j
-langchain-neo4j
-google-ai-generativelanguage
+streamlit==1.33.0
+langchain==0.1.20
+langchain-google-genai==1.0.5
+langgraph==0.0.57
+langchain-community==0.2.0
+langchain-chroma==0.1.2
+sentence-transformers==2.7.0
+pypdf==5.1.0
+python-dotenv==1.0.1
+requests==2.31.0
+beautifulsoup4==4.12.3
+biopython==1.83
+neo4j==5.20.0
+langchain-neo4j==0.1.3
+google-ai-generativelanguage==0.6.0
+# The following ensures CPU versions of torch are preferred
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0

@@ -16,6 +16,8 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 
+from neo4j import GraphDatabase, exceptions as neo4j_exceptions
+
 # --- ROBUSTNESS: Perform startup checks before loading any other app components ---
 def perform_startup_checks():
     """
@@ -48,6 +50,49 @@ def perform_startup_checks():
         )
         return False
         
+    # 3. Check Neo4j connection (if configured)
+    neo4j_uri = os.getenv("NEO4J_URI")
+    neo4j_user = os.getenv("NEO4J_USERNAME")
+    neo4j_password = os.getenv("NEO4J_PASSWORD")
+
+    if neo4j_uri and neo4j_user and neo4j_password:
+        try:
+            print("INFO: Checking Neo4j connectivity...")
+            driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+            driver.verify_connectivity()
+            print("INFO: Neo4j connectivity successful.")
+            driver.close()
+        except neo4j_exceptions.ServiceUnavailable as e:
+            st.error(
+                f"FATAL ERROR: Cannot connect to Neo4j at {neo4j_uri}. "
+                f"Please ensure Neo4j is running and configured correctly in .env.\nDetails: {e}"
+            )
+            return False
+        except neo4j_exceptions.AuthError as e:
+            st.error(
+                f"FATAL ERROR: Neo4j authentication failed. "
+                f"Please check NEO4J_USERNAME and NEO4J_PASSWORD in .env.\nDetails: {e}"
+            )
+            return False
+        except Exception as e: # Catch any other Neo4j related errors
+            st.error(
+                f"FATAL ERROR: An unexpected error occurred while connecting to Neo4j. "
+                f"Please check your Neo4j setup and .env configuration.\nDetails: {e}"
+            )
+            return False
+    elif neo4j_uri or neo4j_user or neo4j_password:
+        # If some Neo4j vars are set but not all
+        st.warning(
+            "WARNING: Neo4j is partially configured in .env. "
+            "Please set NEO4J_URI, NEO4J_USERNAME, and NEO4J_PASSWORD to enable Neo4j integration, "
+            "or remove them all to disable it. The application will continue without Neo4j features."
+        )
+    else:
+        st.info(
+            "INFO: Neo4j is not configured in .env. "
+            "The application will run without Neo4j graph database features."
+        )
+
     return True
 
 # --- Main App Execution ---
@@ -72,8 +117,31 @@ def get_graph():
     The @st.cache_resource decorator ensures this complex object is created only once.
     """
     print("INFO: Initializing LangGraph agent...")
-    graph_builder = WeightManagementGraph()
-    return graph_builder.compile_graph()
+    try:
+        graph_builder = WeightManagementGraph()
+        compiled_graph = graph_builder.compile_graph()
+        print("INFO: LangGraph agent initialized and compiled successfully.")
+        return compiled_graph
+    except FileNotFoundError as e: # Specifically for db path not found from WeightManagementGraph init
+        st.error(f"FATAL ERROR during graph initialization: {e}")
+        print(f"FATAL ERROR during graph initialization: {e}", file=sys.stderr)
+        # st.stop() # This is not ideal inside a cached func, re-raising is better
+        raise # Re-raise to stop app and prevent caching a bad state
+    except ValueError as e: # Specifically for API keys or model name errors from WeightManagementGraph init
+        st.error(f"FATAL CONFIGURATION ERROR during graph initialization: {e}")
+        print(f"FATAL CONFIGURATION ERROR during graph initialization: {e}", file=sys.stderr)
+        raise # Re-raise
+    except Exception as e:
+        st.error(f"FATAL ERROR: Could not initialize the WeightManagementGraph. App cannot start.\nDetails: {e}")
+        print(f"FATAL ERROR: Could not initialize the WeightManagementGraph. App cannot start.\nDetails: {e}", file=sys.stderr)
+        # Attempt to close Neo4j driver if it was initialized by WeightManagementGraph before failing
+        if 'graph_builder' in locals() and hasattr(graph_builder, 'neo4j_driver') and graph_builder.neo4j_driver:
+            try:
+                graph_builder.neo4j_driver.close()
+                print("INFO: Neo4j driver closed during error handling in get_graph.")
+            except Exception as e_close:
+                print(f"ERROR: Exception while closing Neo4j driver during error handling: {e_close}", file=sys.stderr)
+        raise # Re-raise to stop app
 
 def log_feedback(interaction: dict, feedback: str):
     """Logs the user's feedback on an answer to a file for later review."""

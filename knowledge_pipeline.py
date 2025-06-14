@@ -2,6 +2,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import json
+from datetime import datetime
 import sys
 from dotenv import load_dotenv
 from urllib.parse import urljoin, quote_plus, urlparse, urlunparse
@@ -92,6 +93,7 @@ TRUSTED_SEARCH_SITES = {
 # --- File Paths ---
 PENDING_REVIEW_FILE = "pending_review.jsonl"
 PROCESSED_URLS_LOG = "processed_urls.log"
+LLM_PARSING_ERRORS_LOG = "llm_parsing_errors.log"
 
 # --- Helper Functions ---
 
@@ -245,8 +247,24 @@ def main():
                 f.write(json.dumps(proposition) + "\n")
             log_processed_url(url) # Log as processed only after successful proposition
             print(f"--> Proposition saved for review from {url}")
-        except json.JSONDecodeError:
-            print(f"--> FAILED to parse LLM response for {url}. Raw output: '{result_str[:500]}...' Skipping.")
+        except json.JSONDecodeError as e: # Added 'as e'
+            error_message = f"--> FAILED to parse LLM response for {url}. Raw output (first 500 chars): '{result_str[:500]}...' Error: {e}. Skipping."
+            print(error_message, file=sys.stderr) # Print to stderr for consistency
+
+            # Log the full error details to a separate file
+            try:
+                error_log_entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "url": url,
+                    "error_type": "JSONDecodeError",
+                    "message": str(e),
+                    "full_llm_output": result_str
+                }
+                # LLM_PARSING_ERRORS_LOG needs to be in scope in the modified file's main()
+                with open(LLM_PARSING_ERRORS_LOG, "a") as error_f:
+                    error_f.write(json.dumps(error_log_entry) + "\n")
+            except Exception as log_e:
+                print(f"CRITICAL: Failed to write to {LLM_PARSING_ERRORS_LOG}: {log_e}", file=sys.stderr)
     
     print("\n--- Pipeline run complete. ---")
 
