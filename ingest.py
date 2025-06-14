@@ -67,7 +67,7 @@ def store_graph_data_in_neo4j(graph_data, driver):
                 print(f"Skipping entity due to missing name or type: {entity}", file=sys.stderr)
                 continue
             session.run(
-                "MERGE (e:Entity {{name: $name, type: $type}})",
+                "MERGE (e:Entity {name: $name, type: $type})",
                 name=entity["name"], type=entity["type"]
             )
         for rel in graph_data.get("relationships", []):
