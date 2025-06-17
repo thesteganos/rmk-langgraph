@@ -32,7 +32,7 @@ graph TD
     B -- Unsafe --> C[Provide Canned Safety Response];
 
     D -- Foundational --> E[Answer from LLM Memory];
-    D -- Protocol --> F[RAG on Trusted DB (Vector + Graph)];
+    D -- Protocol --> F[RAG on Trusted DB (Vector + Graph)]
     D -- Hybrid --> G[Hybrid RAG (Web Search + Tools)];
 
     F -- Knowledge Gap Found --> P{Log Gap & Reroute};
