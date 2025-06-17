@@ -102,10 +102,17 @@ class WeightManagementGraph:
         print(f"---NODE: {node_name}---")
         try:
             prompt = ChatPromptTemplate.from_template(
-                """You are a safety classification system. Analyze the user's query.
-                If the query asks for harmful, dangerous, or unethical advice related to weight loss, eating disorders, or steroid use, classify it as "unsafe".
-                Otherwise, classify it as "safe". Respond with ONLY the word "safe" or "unsafe".
-                Query: {query}"""
+                """You are a safety classification system. Analyze the user's query to determine if it seeks harmful advice.
+                If the query asks for dangerous, unethical, or harmful advice related to:
+                - Extreme dieting techniques or unhealthy weight loss methods
+                - Promotion or glorification of eating disorders (e.g., anorexia, bulimia)
+                - Non-prescribed use or misuse of medications for body alteration (e.g., weight loss drugs, anabolics, hormones)
+                - Self-harm related to body image or weight
+                - Any other advice that could realistically lead to significant physical or psychological harm in the context of weight management, metabolic health, or muscle building,
+                classify it as "unsafe".
+                Otherwise, classify it as "safe".
+                Respond with ONLY the single word "safe" or "unsafe".
+                Query: {{query}}"""
             )
             chain = prompt | self.llm | StrOutputParser()
             result = chain.invoke({"query": state["query"]})
@@ -127,11 +134,19 @@ class WeightManagementGraph:
         print(f"---NODE: {node_name}---")
         try:
             prompt = ChatPromptTemplate.from_template(
-                """Classify the user's query into one of three categories:
-                1. foundational: For basic scientific principles or definitions. (e.g., "What is a calorie?")
-                2. protocol: For established, evidence-based practices or guidelines. (e.g., "What is the recommended protein intake?")
-                3. hybrid: For trendy topics, supplements, user-specific situations, or very recent research. (e.g., "Is the carnivore diet good?")
-                Respond with ONLY the category word. Query: {query}"""
+                """Classify the user's query into one of three categories based on its nature and the typical source of information required to answer it:
+
+                1.  **foundational**: For queries about basic scientific principles, definitions, or general concepts within nutrition, exercise, and metabolic health. These usually have well-established, undisputed answers.
+                    *   Examples: "What is a calorie?", "Define Metabolic Syndrome.", "What is protein?", "Explain insulin resistance."
+
+                2.  **protocol**: For queries about established, evidence-based practices, specific guidelines, or well-researched recommendations related to managing obesity, metabolic disorders, weight loss, or muscle gain.
+                    *   Examples: "What is the recommended protein intake for muscle gain?", "What are the diagnostic criteria for Type 2 Diabetes?", "How is obesity medically treated?", "What are lifestyle modifications for PCOS?"
+
+                3.  **hybrid**: For queries on emerging or trendy topics, specific supplements with mixed evidence, highly personalized user-specific situations that require more than general guidelines, or very recent research not yet in established protocols. These often require drawing from broader, more current information sources.
+                    *   Examples: "Is the carnivore diet effective for long-term weight loss?", "What are the benefits of berberine for blood sugar?", "I'm a 45-year-old male with Type 2 diabetes, can I do HIIT training?", "Tell me about the latest research on tirzepatide."
+
+                Respond with ONLY the category word (foundational, protocol, or hybrid).
+                Query: {{query}}"""
             )
             chain = prompt | self.llm | StrOutputParser()
             result = chain.invoke({"query": state["query"]})
@@ -231,14 +246,15 @@ class WeightManagementGraph:
             else:
                 combined_context = f"Knowledge Base Documents (from vector search):\n{chroma_context_str}"
 
-            prompt_template_str = """You are a specialist medical AI. Your task is to answer the user's question based *only* on the trusted information provided in the context.
+            prompt_template_str = """You are a specialist medical AI with expertise in obesity, metabolic disorders (such as Type 2 Diabetes, Metabolic Syndrome, PCOS), weight management, nutrition, and exercise physiology.
+Your task is to answer the user's question based *only* on the trusted information provided in the context.
 The context may include documents from a knowledge base (vector search) and structured information from a knowledge graph.
-- If the context contains relevant information, provide a clear, evidence-based answer. Synthesize information from both sources if applicable.
-- If the context (from both vector and graph searches) is empty or irrelevant to the question, you MUST respond with the exact phrase: "KNOWLEDGE_GAP".
-- Do not use any external knowledge. Be concise.
+- If the context contains relevant information directly addressing the user's question, provide a clear, evidence-based answer. Synthesize information from both vector and graph sources if applicable and relevant.
+- If the context (from both vector and graph searches combined) is empty or does not contain information relevant to the user's specific question, you MUST respond with the exact phrase: "KNOWLEDGE_GAP".
+- Do not use any external knowledge or information outside the provided context. Be concise and directly answer the question.
 Context:
-{context}
-Question: {question}"""
+{{context}}
+Question: {{question}}"""
             prompt = ChatPromptTemplate.from_template(prompt_template_str)
 
             llm_processing_chain = prompt | self.llm | StrOutputParser()

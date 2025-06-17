@@ -27,57 +27,133 @@ TRUSTED_SOURCES = {
 # 2. TERMS OF INTEREST (for active, recursive knowledge seeking)
 # The pipeline will proactively search for these topics.
 TERMS_OF_INTEREST = [
-    "semaglutide for weight loss",
-    "metformin and weight management",
-    "creatine monohydrate benefits",
-    "sarcopenia diagnosis and treatment",
-    "intermittent fasting science",
-    "ketogenic diet for obesity",
-    "protein intake for muscle synthesis",
-    "ozempic side effects",
-    "GLP-1 Receptor Agonists",
-    "Dual GIP and GLP-1 Receptor Agonists",
-    "Phentermine/Topiramate",
-    "Naltrexone/Bupropion",
-    "Orlistat",
-    "Bariatric Surgery",
-    "Gastric Bypass (Roux-en-Y)",
-    "Sleeve Gastrectomy",
-    "Gastric Banding",
-    "Medical Nutrition Therapy (MNT)",
-    "Behavioral Therapy",
-    "Comprehensive Lifestyle Intervention",
-    "Calorie Deficit",
-    "Macronutrient Balance",
-    "Low-Carbohydrate Diets",
-    "Intermittent Fasting (IF)",
-    "Mediterranean Diet",
-    "Volumetrics",
-    "Energy Balance",
-    "Total Daily Energy Expenditure (TDEE)",
-    "Basal Metabolic Rate (BMR)",
-    "Weight Loss Plateau",
-    "Body Composition",
-    "Resistance Training",
-    "Progressive Overload",
-    "Mechanical Tension",
-    "Muscle Damage",
-    "Metabolic Stress",
-    "Protein Synthesis",
-    "Caloric Surplus",
-    "Leucine",
-    "Nutrient Timing",
-    "Creatine Monohydrate",
-    "Metabolic Syndrome (MetS)",
-    "Insulin Resistance",
-    "Type 2 Diabetes",
-    "Dyslipidemia",
-    "Non-alcoholic Fatty Liver Disease (NAFLD)",
-    "Glycemic Control",
-    "HbA1c",
-    "Lipid Panel",
-    "Cardiometabolic Health",
-    "Sarcopenic Obesity",
+    # Core Focus: Obesity, Weight Loss & Metabolic Disorders
+    # Obesity & Weight Management Strategies
+    "Obesity diagnosis and assessment",
+    "Obesity comorbidities",
+    "Pharmacotherapy for obesity guidelines", # New
+    "Semaglutide for weight loss and diabetes (Ozempic, Wegovy, Rybelsus)",
+    "Liraglutide (Saxenda, Victoza)", # Existing, re-prioritized
+    "liraglutide for weight loss", # New & specific
+    "Tirzepatide (Mounjaro, Zepbound)", # Existing, re-prioritized
+    "tirzepatide for weight loss", # New & specific
+    "Setmelanotide for genetic obesity", # New
+    "Retatrutide clinical trials",
+    "GLP-1 Receptor Agonists mechanisms and side effects",
+    "Metformin for weight management and prediabetes",
+    "Phentermine/Topiramate (Qsymia) for obesity",
+    "Naltrexone/Bupropion (Contrave) for obesity",
+    "Orlistat (Alli, Xenical) for weight loss",
+    "Anti-obesity medications pipeline and future research",
+    "Bariatric Surgery criteria, types, and outcomes",
+    "Gastric Bypass (Roux-en-Y) surgery",
+    "Sleeve Gastrectomy surgery",
+    "Gastric Banding adjustments and complications",
+    "Endoscopic sleeve gastroplasty procedure",
+    "Calorie Deficit for weight loss",
+    "Energy Balance equation",
+    "Total Daily Energy Expenditure (TDEE) calculation",
+    "Basal Metabolic Rate (BMR) factors",
+    "Weight Loss Plateau causes and solutions",
+    "Body Composition Analysis methods (DEXA, BIA)",
+    "Visceral fat reduction", # New
+    "Set Point Theory of weight regulation",
+    "Appetite regulation and obesity", # New
+    "Gut microbiome and obesity", # New
+    "Medical Nutrition Therapy (MNT) for obesity",
+    "Ketogenic diet for obesity and metabolic health",
+    "Low-Carbohydrate Diets efficacy and safety",
+    "Very Low Calorie Diets (VLCDs) guidelines",
+    "Intermittent Fasting methods and scientific evidence",
+    "Time-Restricted Eating (TRE) benefits",
+    "Mediterranean Diet for weight management and cardiovascular health",
+    "Volumetrics Diet plan",
+    "High Protein Diets for satiety and muscle preservation",
+    "Dietary Fiber types and benefits for weight management",
+    "dietary fiber and metabolic health", # New & specific
+    "Meal Replacement Shakes for controlled calorie intake",
+    "Exercise for weight loss and maintenance",
+    "Aerobic exercise for fat loss",
+    "aerobic exercise for metabolic health", # New & specific
+    "Resistance training for weight management and body composition",
+    "High-intensity interval training (HIIT) for fat loss", # New
+    "NEAT (Non-Exercise Activity Thermogenesis) importance",
+    "Behavioral Therapy for sustainable weight loss",
+    "Comprehensive Lifestyle Intervention for obesity",
+    "Cognitive Behavioral Therapy (CBT) for obesity and eating disorders",
+    "Motivational Interviewing techniques for health behavior change",
+    "Mindful Eating practices",
+    "Stress management techniques for weight control", # Covers "stress management for weight control"
+    "Cortisol effects on appetite and fat storage",
+    "Sleep hygiene impact on weight and metabolism",
+    "sleep quality and metabolic syndrome", # New
+    "Weight cycling risks and management",
+    "Childhood obesity prevention and treatment",
+    "Brown Adipose Tissue (BAT) activation for weight loss", # Retained, lower priority
+    "White Adipose Tissue (WAT) browning", # Retained, lower priority
+
+    # Metabolic Disorders (Integrated with Obesity where relevant)
+    "Metabolic Syndrome (MetS) diagnostic criteria and management",
+    "Insulin Resistance mechanisms, diagnosis, and reversal",
+    "Prediabetes diagnosis and intervention", # Existing, re-prioritized
+    "prediabetes diagnosis and management", # New & specific
+    "Type 2 Diabetes prevention, management, and remission",
+    "Polycystic Ovary Syndrome (PCOS) metabolic features and treatment",
+    "polycystic ovary syndrome (PCOS) and insulin resistance", # New & specific
+    "Gestational Diabetes risks and management", # Existing, re-prioritized
+    "gestational diabetes management", # New & specific
+    "Non-alcoholic Fatty Liver Disease (NAFLD) and NASH progression",
+    "Dyslipidemia diagnosis and lipid management",
+    "Hypertriglyceridemia causes and treatment",
+    "Low HDL cholesterol implications",
+    "Hypertension relationship with metabolic syndrome", # Highly relevant to MetS
+    "Glycemic Control strategies in diabetes",
+    "HbA1c targets and interpretation",
+    "Fasting Plasma Glucose test",
+    "Oral Glucose Tolerance Test (OGTT) procedure",
+    "Lipid Panel components and interpretation",
+    "Cardiometabolic Health and risk factors",
+    "Endothelial dysfunction in metabolic disorders",
+    # Less central, but still relevant supporting terms for metabolic disorders
+    "Type 1 Diabetes autoimmune mechanisms and treatment", # Retained for completeness on Diabetes
+    "C-Reactive Protein (CRP) as an inflammatory marker", # General but relevant
+    "Microvascular complications of diabetes (retinopathy, nephropathy, neuropathy)", # Supporting
+    "Macrovascular complications of diabetes (heart disease, stroke)", # Supporting
+
+    # Muscle Gain & Body Recomposition
+    "Resistance Training principles for hypertrophy",
+    "Progressive Overload in strength training",
+    "Mechanical Tension as a driver for muscle growth",
+    "Muscle Damage and repair processes in hypertrophy",
+    "Metabolic Stress contribution to muscle growth",
+    "Training Volume recommendations for muscle gain",
+    "Training Frequency for optimal muscle protein synthesis",
+    "Exercise Selection for targeted muscle development",
+    "Periodization models for long-term strength and muscle gain",
+    "Muscle Protein Synthesis (MPS) regulation",
+    "Protein intake recommendations for muscle synthesis (grams per kg)",
+    "Essential Amino Acids (EAAs) role in muscle building",
+    "Leucine threshold for stimulating MPS",
+    "Caloric Surplus for lean muscle mass gain",
+    "Nutrient Timing strategies for muscle recovery and growth",
+    "Carbohydrate requirements for strength athletes",
+    "Dietary Fats role in hormone production and muscle health",
+    "Creatine Monohydrate benefits, dosage, and safety for muscle growth",
+    "Whey Protein types (isolate, concentrate, hydrolysate) and benefits",
+    "Casein Protein for sustained amino acid release",
+    "Beta-Alanine supplementation for performance and muscle endurance",
+    "Citrulline Malate for improved blood flow and performance",
+    "HMB (Beta-hydroxy beta-methylbutyrate) for muscle preservation",
+    "Body recomposition strategies", # New
+    "Sarcopenia diagnosis, treatment, and prevention", # Relevant to muscle health, esp. aging
+    "Sarcopenic Obesity characteristics and management", # Intersection of core topics
+    # Less central/more niche for muscle gain
+    "Branched-Chain Amino Acids (BCAAs) supplementation efficacy", # Often debated, lower priority
+    "Anabolic Steroids use, side effects, and health risks", # For completeness on muscle gain topics
+    "Muscle dysmorphia symptoms and treatment", # Psychological aspect
+
+    # General but Highly Relevant (Supporting Core Topics)
+    "Macronutrient Balance for health and body composition",
 ]
 
 # 3. TRUSTED SEARCH SITES (the search engines of our trusted sources)
@@ -187,9 +263,32 @@ def main():
     llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=google_api_key)
     
     prompt = ChatPromptTemplate.from_template(
-        """You are a medical knowledge extraction system. Read the article text and generate a single, clear question it answers, and a detailed answer based ONLY on the text.
-    Your output MUST be a single, valid JSON object with keys "question" and "answer". Do not include any other text or formatting.
-    ARTICLE TEXT: --- {article_text} ---"""
+        """You are an AI assistant specializing in health and wellness, tasked with creating informative question-and-answer pairs from medical and scientific texts.
+        Your goal is to generate a single, clear question that the provided article text answers, along with a detailed and accurate answer based ONLY on the information within the text.
+
+        **Primary Focus for Q&A Generation:**
+        Prioritize questions and answers directly relevant to the following topics:
+        1.  **Obesity and its Management:** Causes, health risks, lifestyle interventions (diet, exercise, behavior change), dietary strategies, and approved medical treatments for obesity.
+        2.  **Metabolic Disorders:** Specifically Type 2 Diabetes, Metabolic Syndrome, and Polycystic Ovary Syndrome (PCOS), with an emphasis on their relationship to diet, physical activity, and body weight.
+        3.  **Sustainable Weight Loss Strategies:** Evidence-based approaches for achieving and maintaining healthy weight loss.
+        4.  **Principles of Muscle Gain:** Nutritional requirements (e.g., protein intake, caloric balance) and training principles (e.g., resistance exercise) for building muscle mass.
+
+        **Content Guidelines:**
+        *   **Evidence-Based:** Focus on extracting information that is factual and scientifically supported within the provided text.
+        *   **Actionable (where appropriate):** If the text supports it, formulate Q&A that provides practical or actionable insights for the reader.
+        *   **Informative Tone:** The question and answer should be clear, concise, and presented in an objective, informative tone suitable for a health-focused application. Avoid overly technical jargon where possible, or explain it if necessary for understanding.
+        *   **Specificity:** Generate questions that target specific details in the text, rather than overly broad questions.
+
+        **Output Format:**
+        Your output MUST be a single, valid JSON object with exactly two keys: "question" and "answer". Do not include any other text, formatting, or explanations outside of this JSON structure.
+
+        Example:
+        {{
+            "question": "What are the primary recommended lifestyle modifications for managing Type 2 Diabetes?",
+            "answer": "The primary recommended lifestyle modifications for managing Type 2 Diabetes, according to the text, include adopting a balanced dietary plan with controlled carbohydrate intake, engaging in regular physical activity (at least 150 minutes of moderate-intensity aerobic exercise per week), achieving and maintaining a healthy body weight, and regular monitoring of blood glucose levels."
+        }}
+
+        ARTICLE TEXT: --- {article_text} ---"""
     )
     extraction_chain = prompt | llm | StrOutputParser()
 

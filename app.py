@@ -160,7 +160,7 @@ app = get_graph()
 # Initialize chat history in Streamlit's session state if it doesn't exist
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hello! I am an AI assistant specializing in weight management, obesity, muscle gain, and metabolic disorders like Type 2 Diabetes and Metabolic Syndrome. How can I help you today?"}
+        {"role": "assistant", "content": "Welcome! I'm your AI assistant, here to help you with obesity management, weight loss, muscle gain, and understanding metabolic disorders such as Type 2 Diabetes, Metabolic Syndrome, and PCOS. How can I assist you today?"}
     ]
 
 # --- UI Components ---

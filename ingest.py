@@ -23,22 +23,80 @@ PROCESSED_LOG_FILE = os.path.join(DB_PATH, "processed_files.log")
 def extract_graph_data_from_chunk(text_chunk, llm):
     prompt = ChatPromptTemplate.from_template(
         """
-        From the following text, extract entities and their relationships.
-        Return the output as a JSON object with two keys: "entities" and "relationships".
-        "entities" should be a list of objects, where each object has a "name" and "type" (e.g., "Symptom", "Condition", "Treatment", "Concept").
-        "relationships" should be a list of objects, where each object has a "source" (entity name), "target" (entity name), and "type" (e.g., "CAUSES", "TREATS", "RELATED_TO").
-        Focus on meaningful biomedical or health-related entities and relationships.
+        You are an expert in biomedical and health knowledge graph generation.
+        From the following text, extract entities and their relationships, focusing primarily on the areas detailed below.
+        Return the output as a single, valid JSON object with two keys: "entities" and "relationships".
 
-        Example JSON output:
+        **Primary Focus Areas & Entity Types:**
+
+        1.  **Obesity & Weight Management:**
+            *   Entities:
+                *   `Condition_Obesity` (e.g., "Obesity", "Childhood Obesity", "Abdominal Obesity")
+                *   `Factor_Obesity` (e.g., "Genetic predisposition", "Sedentary lifestyle", "High-calorie diet") - for causes/contributors
+                *   `Complication_Obesity` (e.g., "Hypertension associated with obesity", "Sleep apnea")
+                *   `Treatment_WeightManagement` (e.g., "Bariatric surgery", "Calorie restriction", "Semaglutide") - can include lifestyle, medication, surgery
+                *   `Diet_WeightManagement` (e.g., "Ketogenic Diet", "Mediterranean Diet for weight loss")
+        2.  **Metabolic Health:**
+            *   Entities:
+                *   `Condition_Metabolic` (e.g., "Type 2 Diabetes", "Metabolic Syndrome", "PCOS", "Insulin Resistance")
+                *   `Biomarker_Metabolic` (e.g., "HbA1c", "Fasting Glucose", "Insulin Levels", "Homocysteine")
+                *   `Process_Metabolic` (e.g., "Insulin signaling pathway", "Glycolysis", "Gluconeogenesis")
+                *   `Treatment_Metabolic` (e.g., "Metformin", "Lifestyle modification for diabetes")
+        3.  **Nutrition:**
+            *   Entities:
+                *   `Nutrient_Macro` (e.g., "Protein", "Carbohydrate", "Fat", "Saturated Fat")
+                *   `Nutrient_Micro` (e.g., "Vitamin D", "Iron", "Omega-3 fatty acids")
+                *   `DietaryPattern` (e.g., "High-protein diet", "Low-glycemic diet") - distinct from specific named diets for weight management unless context implies that.
+                *   `Food` (e.g., "Avocado", "Salmon", "Leafy greens") - if specific foods are discussed with their properties.
+        4.  **Exercise Physiology & Types:**
+            *   Entities:
+                *   `Exercise_Type` (e.g., "Resistance Training", "Aerobic Exercise", "HIIT")
+                *   `Adaptation_Exercise` (e.g., "Muscle hypertrophy", "Increased VO2 max", "Mitochondrial biogenesis")
+                *   `Principle_Training` (e.g., "Progressive Overload", "Specificity")
+        5.  **Body Composition:**
+            *   Entities:
+                *   `Tissue_BodyComposition` (e.g., "Fat Mass", "Lean Body Mass", "Visceral Adipose Tissue")
+                *   `Hormone_BodyComposition` (e.g., "Leptin", "Ghrelin", "Testosterone", "Cortisol") - specific to body comp regulation
+                *   `Process_BodyComposition` (e.g., "Lipolysis", "Muscle protein synthesis", "Adipogenesis")
+
+        **General Entity Types (Use if significant and not fitting above categories):**
+            *   `Symptom` (e.g., "Fatigue")
+            *   `Condition_General` (e.g., "Hypertension" - if not tied directly to obesity/metabolic syndrome in context)
+            *   `Treatment_General` (e.g., "Aspirin")
+            *   `Anatomy` (e.g., "Liver", "Pancreas", "Skeletal Muscle")
+            *   `Gene` (e.g., "FTO gene")
+            *   `Protein_General` (e.g., "Enzyme", "Receptor" - if not a specific hormone or biomarker above)
+            *   `Molecular_Process` (e.g., "Inflammation", "Oxidative Stress" - if not covered by a more specific process type)
+            *   `Concept_General` (e.g., "Public health", "Clinical trial")
+
+        **Relationship Types:**
+        Use descriptive relationship types (e.g., "CAUSES", "PREVENTS", "TREATS", "MANAGES", "INCREASES_RISK_OF", "DECREASES_RISK_OF", "ASSOCIATED_WITH", "PART_OF", "REGULATES", "PRODUCES", "INHIBITS", "STIMULATES", "MEASURES", "TYPE_OF", "SUBCLASS_OF", "IMPROVES", "WORSENS", "DIAGNOSES").
+        Be specific. For example, instead of `{"source": "Metformin", "target": "Type 2 Diabetes", "type": "RELATED_TO"}`, prefer `{"source": "Metformin", "target": "Type 2 Diabetes", "type": "TREATS"}`.
+
+        **Output Structure:**
+        "entities" should be a list of objects, each with "name" (string) and "type" (string from the defined types).
+        "relationships" should be a list of objects, each with "source" (string, entity name), "target" (string, entity name), and "type" (string).
+        Ensure entity names in relationships match exactly those in the entities list.
+
+        **Example (Illustrative - adapt types based on definitions above):**
         {{
             "entities": [
-                {{"name": "Fever", "type": "Symptom"}},
-                {{"name": "Influenza", "type": "Condition"}}
+                {{"name": "Obesity", "type": "Condition_Obesity"}},
+                {{"name": "Type 2 Diabetes", "type": "Condition_Metabolic"}},
+                {{"name": "Sedentary Lifestyle", "type": "Factor_Obesity"}},
+                {{"name": "Metformin", "type": "Treatment_Metabolic"}},
+                {{"name": "Resistance Training", "type": "Exercise_Type"}},
+                {{"name": "Muscle Hypertrophy", "type": "Adaptation_Exercise"}}
             ],
             "relationships": [
-                {{"source": "Fever", "target": "Influenza", "type": "SYMPTOM_OF"}}
+                {{"source": "Sedentary Lifestyle", "target": "Obesity", "type": "INCREASES_RISK_OF"}},
+                {{"source": "Obesity", "target": "Type 2 Diabetes", "type": "INCREASES_RISK_OF"}},
+                {{"source": "Metformin", "target": "Type 2 Diabetes", "type": "TREATS"}},
+                {{"source": "Resistance Training", "target": "Muscle Hypertrophy", "type": "CAUSES"}}
             ]
         }}
+
+        Prioritize comprehensive extraction based on the defined areas and types. If a concept is mentioned that fits a general type but is highly significant in the context of the primary focus areas, please include it.
 
         Text:
         {chunk}
