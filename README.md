@@ -19,7 +19,7 @@ The system is designed for the high-stakes domain of medical knowledge, specific
 ### Knowledge Sources
 
 *   **Vector Store (ChromaDB):** Stores text chunks from ingested PDF documents, enabling semantic search for relevant passages.
-*   **Knowledge Graph (Neo4j):** Stores entities (like conditions, treatments, concepts) and their relationships extracted from the documents. This allows the system to retrieve interconnected information and understand the context more deeply, particularly for queries requiring factual, structured data (e.g., via the "protocol" query pathway).
+*   **Knowledge Graph (Neo4j):** Stores entities (like conditions, treatments, concepts) and their relationships extracted from the documents. This allows the system to retrieve interconnected information and understand the context more deeply, particularly for queries requiring factual, structured data (e.g., via the "protocol" query pathway). Specifically, in the 'protocol' query pathway, keywords from the user's query are used to search for matching entities in the graph; the system then retrieves these entities and their directly connected neighbors, providing rich, structured context to the LLM.
 
 ## Architecture & Workflow
 
@@ -29,22 +29,24 @@ The application's logic is orchestrated by a LangGraph state machine, which prov
 graph TD
     A[User Query] --> B{Safety Filter};
     B -- Safe --> D{Query Classifier};
-    D -- Protocol --> F[RAG on Trusted DB];
-    
-    F -- Knowledge Gap Found --> P{Log Gap & Reroute};
-    F -- Answer Found --> H[Final Answer];
-    
-    P --> G["Agent with Tools (Google/PubMed)"];
-    G -- Disclaimer Added --> H;
+    B -- Unsafe --> C[Provide Canned Safety Response];
 
-    subgraph "Other Paths"
-        B -- Unsafe --> C[Provide Canned Safety Response];
-        D -- Foundational --> E[Answer from LLM Memory];
-        D -- Hybrid --> G;
-        E --> H;
-        C --> I[END];
-        H --> I;
-    end
+    D -- Foundational --> E[Answer from LLM Memory];
+    D -- Protocol --> F[RAG on Trusted DB (Vector + Graph)];
+    D -- Hybrid --> G[Hybrid RAG (Web Search + Tools)];
+
+    F -- Knowledge Gap Found --> P{Log Gap & Reroute};
+    F -- Answer Found --> AddDisclaimer{Add Disclaimer};
+    
+    P --> G;
+
+    E --> AddDisclaimer;
+    G --> AddDisclaimer;
+
+    AddDisclaimer -- Potentially Add Disclaimer --> H[Final Answer];
+
+    C --> I[END];
+    H --> I[END];
 
     subgraph "Self-Improvement Loop (Offline)"
         P -- Logged --> Q[knowledge_gaps.jsonl]
@@ -53,7 +55,7 @@ graph TD
         K --> N{Expert Review Tool};
         M --> N;
         Q --> N;
-        N -- Approved --> O[Add to Trusted DB];
+        N -- Approved --> O[Add to Trusted DB (Chroma)];
     end
 ```
 
@@ -120,8 +122,8 @@ Follow these steps to get the application running on your local machine.
 
 **1. Clone the repository:**
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
-cd YOUR_REPOSITORY_NAME
+git clone https://github.com/your-username/rmk-langgraph.git
+cd rmk-langgraph
 ```
 
 **2. Create a virtual environment (recommended):**
@@ -152,8 +154,8 @@ cp .env.example .env
 Open the newly created `.env` file with a text editor and fill in your actual credentials and settings:
 -   `GOOGLE_API_KEY`: Your API key for Google Gemini.
 -   `ENTREZ_EMAIL`: Your email address for NCBI Entrez API (PubMed).
--   `ENTREZ_API_KEY`: Your API key for NCBI Entrez API.
--   `LLM_MODEL`: The specific Gemini model to use (e.g., "gemini-1.5-flash-latest"). Defaults to "gemini-1.5-flash-preview-05-20" if not set.
+-   `ENTREZ_API_KEY`: (Optional) Your API key for NCBI Entrez API. Recommended for higher rate limits when searching PubMed.
+-   `LLM_MODEL`: **Mandatory.** The specific Gemini model to use (e.g., "gemini-1.5-flash-latest"). The application will not start if this is not set.
 -   `MAX_CONCURRENCY`: (Optional) The maximum number of concurrent requests the knowledge pipeline will make to the Gemini API when processing articles. Defaults to `5`. This helps manage API rate limits and resource usage.
 -   `NEO4J_URI`: The connection URI for your Neo4j instance (e.g., `bolt://localhost:7687` or `neo4j+s://your-aura-instance.databases.neo4j.io`).
 -   `NEO4J_USERNAME`: The username for your Neo4j database.
@@ -174,9 +176,9 @@ python ingest.py
 The `ingest.py` script processes PDF documents from the `data/` directory. It also loads necessary configurations (like API keys for embedding models, LLMs for graph extraction, and Neo4j connection details) from the `.env` file, similar to `app.py`. Ensure your `.env` file is populated by referring to `.env.example`.
 
 During ingestion:
-1.  Text is extracted and split into manageable chunks.
-2.  These chunks are embedded and stored in ChromaDB for vector search.
-3.  Entities and relationships are extracted from the chunks using a Language Model and stored as a graph in Neo4j. This populates the knowledge graph used in the hybrid RAG process.
+1. Text is extracted and split into manageable chunks.
+2. These chunks are embedded using a locally run HuggingFace Sentence Transformer model (`all-MiniLM-L6-v2`, no API key required) and stored in ChromaDB for vector search.
+3. Entities and relationships are extracted from the chunks using a Language Model (which utilizes the `GOOGLE_API_KEY` from your `.env` file) and stored as a graph in Neo4j. This populates the knowledge graph used in the hybrid RAG process.
 The script keeps track of processed files to enable incremental updates.
 
 
@@ -212,11 +214,12 @@ python knowledge_pipeline.py
 
 #### 3. The Expert Review Tool (`expert_review_tool.py`)
 
-This is the command-line tool for the human expert. It's the quality gate for all new knowledge. When you run this script, it will:
-1.  First, present you with the new knowledge propositions from the automated pipeline.
-2.  Second, present you with the "Good" Q&A pairs submitted by users via the web app's feedback buttons.
+This is the command-line tool for the human expert. It's the quality gate for all new knowledge. When you run this script, it will process items from three sources:
+1.  New knowledge propositions from the automated pipeline (`pending_review.jsonl`).
+2.  "Good" Q&A pairs submitted by users via the web app's feedback buttons (`feedback_for_review.jsonl`).
+3.  Logged knowledge gaps where the system previously failed to find an answer from the trusted database (`knowledge_gaps.jsonl`). For these gaps, the tool will first attempt to generate a new answer using an LLM equipped with web search and PubMed tools before presenting it for your review.
 
-For each item, you can review the content and its source, then choose to **[a]pprove** it to be added to the trusted knowledge base or **[s]kip** it.
+For each item, you can review the content and its source (or the newly generated answer for gaps), then choose to **[a]pprove** it to be added to the trusted knowledge base or **[s]kip** it.
 
 To run the review tool:
 ```bash
